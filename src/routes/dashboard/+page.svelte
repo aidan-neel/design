@@ -7,7 +7,9 @@
 	import MenuRadioItem from '#lib/kit/MenuRadioItem.svelte';
 	import Sidebar from '#lib/kit/Sidebar.svelte';
 	import Tip from '#lib/kit/Tip.svelte';
+	import { navPill } from '#lib/kit/nav-pill.js';
 	import { DropdownMenu } from 'bits-ui';
+	import { onMount } from 'svelte';
 	import { cubicOut } from 'svelte/easing';
 	import { fade, fly } from 'svelte/transition';
 
@@ -190,9 +192,12 @@
 		return out;
 	})();
 
+	type NavEntry = { label: string; icon: IconName; live?: boolean; count?: number; swatch?: string };
+	const SETTINGS_ENTRY: NavEntry = { label: 'Settings', icon: 'settings' };
+
 	const NAV: {
 		group: string;
-		items: { label: string; icon: IconName; live?: boolean; count?: number }[];
+		items: NavEntry[];
 	}[] = [
 		{
 			group: 'Overview',
@@ -221,9 +226,9 @@
 		{
 			group: 'Saved views',
 			items: [
-				{ label: 'Growth weekly', icon: 'pulse' as IconName },
-				{ label: 'Activation · Q4', icon: 'funnel' as IconName },
-				{ label: 'Churn watch', icon: 'retention' as IconName }
+				{ label: 'Growth weekly', icon: 'pulse' as IconName, swatch: '#a5d8ff' },
+				{ label: 'Activation · Q4', icon: 'funnel' as IconName, swatch: '#6ee7b0' },
+				{ label: 'Churn watch', icon: 'retention' as IconName, swatch: '#fbbf24' }
 			]
 		}
 	];
@@ -373,11 +378,22 @@
 		toast = null;
 	}
 
+	// start as a rail on laptop-width screens; the user can still expand it
+	onMount(() => {
+		if (window.matchMedia('(max-width: 1180px)').matches) railed = true;
+	});
+
+	function go(view: string) {
+		activeNav = view;
+		menuOpen = false;
+	}
+
 	function setRange(value: string) {
 		if ((RANGES as string[]).includes(value)) range = value as Range;
 	}
 
 	function refresh() {
+		if (refreshing) return;
 		refreshing = true;
 		setTimeout(() => {
 			refreshing = false;
@@ -750,121 +766,161 @@
 	</svg>
 {/snippet}
 
-{#snippet navList()}
-	<nav aria-label="Main">
+{#snippet navItem(item: NavEntry, collapsed: boolean)}
+	<Tip label={item.label} side="right" disabled={!collapsed}>
+		{#snippet trigger({ props })}
+			<button
+				{...props}
+				class="nav-item"
+				aria-current={activeNav === item.label ? 'page' : undefined}
+				aria-label={collapsed ? item.label : undefined}
+				type="button"
+				onclick={() => go(item.label)}
+			>
+				{#if item.swatch}
+					<span class="nav-swatch" style="background: {item.swatch}" aria-hidden="true"></span>
+				{:else}
+					{@render glyph(item.icon, 16)}
+				{/if}
+				<span class="nav-label fades">{item.label}</span>
+				{#if item.live}
+					<span class="live-dot" aria-label="Live"></span>
+				{:else if item.count}
+					<span class="nav-count fades">{item.count}</span>
+				{/if}
+			</button>
+		{/snippet}
+	</Tip>
+{/snippet}
+
+{#snippet navList(collapsed: boolean)}
+	<nav class="nav" aria-label="Main">
 		{#each NAV as section (section.group)}
-			<p class="group">{section.group}</p>
-			{#each section.items as item (item.label)}
-				<button
-					class="nav-item"
-					title={item.label}
-					class:active={activeNav === item.label}
-					aria-current={activeNav === item.label ? 'page' : undefined}
-					onclick={() => {
-						activeNav = item.label;
-						menuOpen = false;
-					}}
-				>
-					{@render glyph(item.icon, 15)}
-					<span class="nav-label">{item.label}</span>
-					{#if item.live}
-						<span class="live-dot" aria-label="Live"></span>
-					{:else if item.count}
-						<span class="nav-count">{item.count}</span>
-					{/if}
-				</button>
-			{/each}
+			<div class="nav-group">
+				<p class="group fades">{section.group}</p>
+				{#each section.items as item (item.label)}
+					{@render navItem(item, collapsed)}
+				{/each}
+			</div>
 		{/each}
 	</nav>
 {/snippet}
 
-<div class="dash">
-	<aside class="side">
-		<div class="brand">
-			<span class="logo" aria-hidden="true">
-				<svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-					<path d="M3 11.5V8.2M8 11.5V4.5M13 11.5V6.8" stroke="#08131d" stroke-width="2" stroke-linecap="round" />
-				</svg>
-			</span>
-			<span class="brand-text">
-				<span class="brand-name">Sift</span>
-				<span class="brand-workspace">Acme Labs</span>
-			</span>
-			<button class="ws-switch" aria-label="Switch workspace">{@render glyph('chevrons', 13)}</button>
-		</div>
+{#snippet logo()}
+	<span class="logo" aria-hidden="true">
+		<svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+			<path d="M3 11.5V8.2M8 11.5V4.5M13 11.5V6.8" stroke="#08131d" stroke-width="2" stroke-linecap="round" />
+		</svg>
+	</span>
+{/snippet}
 
-		{@render navList()}
-
-		<div class="side-foot">
-			<div class="health">
-				<div class="health-top">
-					<span>Data health</span>
-					<span class="health-value">99.98%</span>
-				</div>
-				<div class="health-bar"><span></span></div>
-				<p class="health-note">2 sources synced · 0 errors</p>
-			</div>
-
-			<button
-				class="nav-item"
-				title="Settings"
-				onclick={() => (activeNav = 'Settings')}
-				class:active={activeNav === 'Settings'}
-			>
-				{@render glyph('settings', 15)}
-				<span class="nav-label">Settings</span>
-			</button>
-
-			<div class="user">
-				<span class="avatar">AC</span>
-				<span class="user-text">
-					<span class="user-name">Ada Chen</span>
-					<span class="user-mail">ada@acme.co</span>
-				</span>
-				<button class="icon-btn small" aria-label="Account menu">{@render glyph('more', 14)}</button>
-			</div>
-		</div>
-	</aside>
-
-	{#if menuOpen}
-		<div class="scrim" role="presentation" onclick={() => (menuOpen = false)}></div>
-		<aside class="drawer" aria-label="Navigation">
-			<div class="drawer-head">
-				<div class="brand">
-					<span class="logo" aria-hidden="true">
-						<svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-							<path d="M3 11.5V8.2M8 11.5V4.5M13 11.5V6.8" stroke="#08131d" stroke-width="2" stroke-linecap="round" />
-						</svg>
-					</span>
-					<span class="brand-text">
+{#snippet workspaceMenu()}
+	<DropdownMenu.Root>
+		<DropdownMenu.Trigger>
+			{#snippet child({ props })}
+				<button {...props} class="brand" type="button">
+					{@render logo()}
+					<span class="brand-text fades">
 						<span class="brand-name">Sift</span>
-						<span class="brand-workspace">Acme Labs</span>
+						<span class="brand-workspace">{workspaceLabel}</span>
 					</span>
-					<button class="ws-switch" aria-label="Close menu" onclick={() => (menuOpen = false)}>
-						{@render glyph('close', 14)}
-					</button>
-				</div>
-			</div>
-			{@render navList()}
-			<div class="side-foot">
-				<button
-					class="nav-item"
-					onclick={() => {
-						activeNav = 'Settings';
-						menuOpen = false;
-					}}
-					class:active={activeNav === 'Settings'}
-				>
-					{@render glyph('settings', 15)}
-					<span class="nav-label">Settings</span>
+					<span class="brand-chev fades">{@render glyph('chevrons', 13)}</span>
 				</button>
-				<div class="user">
+			{/snippet}
+		</DropdownMenu.Trigger>
+		<MenuContent minWidth={220}>
+			<DropdownMenu.Group>
+				<DropdownMenu.GroupHeading class="kit-menu-label">Workspaces</DropdownMenu.GroupHeading>
+				<DropdownMenu.RadioGroup bind:value={workspace}>
+					{#each WORKSPACES as w (w.value)}
+						<MenuRadioItem value={w.value}>{w.label}</MenuRadioItem>
+					{/each}
+				</DropdownMenu.RadioGroup>
+			</DropdownMenu.Group>
+			<DropdownMenu.Separator class="kit-menu-sep" />
+			<MenuItem onSelect={() => notify('Invite link copied')}>Invite teammates</MenuItem>
+		</MenuContent>
+	</DropdownMenu.Root>
+{/snippet}
+
+{#snippet accountMenu(collapsed: boolean)}
+	<DropdownMenu.Root>
+		<DropdownMenu.Trigger>
+			{#snippet child({ props })}
+				<button {...props} class="user" type="button" aria-label={collapsed ? 'Account: Ada Chen' : undefined}>
 					<span class="avatar">AC</span>
-					<span class="user-text">
+					<span class="user-text fades">
 						<span class="user-name">Ada Chen</span>
 						<span class="user-mail">ada@acme.co</span>
 					</span>
+					<span class="user-more fades">{@render glyph('more', 14)}</span>
+				</button>
+			{/snippet}
+		</DropdownMenu.Trigger>
+		<MenuContent side="top" minWidth={220}>
+			<MenuItem onSelect={() => go('Settings')}>Account settings</MenuItem>
+			<MenuItem onSelect={() => (railed = !railed)} keys={['⌘', 'B']}>{railed ? 'Expand sidebar' : 'Collapse sidebar'}</MenuItem>
+			<DropdownMenu.Separator class="kit-menu-sep" />
+			<MenuItem onSelect={() => notify('Signed out (not really, it’s a demo)')}>Sign out</MenuItem>
+		</MenuContent>
+	</DropdownMenu.Root>
+{/snippet}
+
+{#snippet panelIcon()}
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+		<rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" />
+	</svg>
+{/snippet}
+
+<KitRoot class="sift-kit">
+<div class="dash">
+	<Sidebar bind:collapsed={railed} defaultWidth={232} minWidth={200} maxWidth={320} collapsedWidth={60} class="side-col">
+		{#snippet children({ collapsed })}
+			<aside class="side" class:rail={collapsed} use:navPill={activeNav}>
+				<span class="nav-pill" aria-hidden="true"></span>
+				<div class="side-top">
+					{@render workspaceMenu()}
+					{#if !collapsed}
+						<span class="side-toggle" transition:fade={{ duration: 120 }}>
+							<IconButton label="Collapse sidebar" keys={['⌘', 'B']} side="bottom" onclick={() => (railed = true)}>
+								{@render panelIcon()}
+							</IconButton>
+						</span>
+					{/if}
 				</div>
+
+				{@render navList(collapsed)}
+
+				<div class="side-foot">
+					<div class="health fades">
+						<div class="health-top">
+							<span>Data health</span>
+							<span class="health-value">99.98%</span>
+						</div>
+						<div class="health-bar"><span></span></div>
+						<p class="health-note">2 sources synced · 0 errors</p>
+					</div>
+					{@render navItem(SETTINGS_ENTRY, collapsed)}
+					{@render accountMenu(collapsed)}
+				</div>
+			</aside>
+		{/snippet}
+	</Sidebar>
+
+	{#if menuOpen}
+		<div class="scrim" role="presentation" onclick={() => (menuOpen = false)} transition:fade={{ duration: 160 }}></div>
+		<aside class="drawer side" aria-label="Navigation" use:navPill={activeNav} transition:fly={{ x: -24, duration: 240, easing: cubicOut }}>
+			<span class="nav-pill" aria-hidden="true"></span>
+			<div class="side-top">
+				{@render workspaceMenu()}
+				<IconButton label="Close menu" side="bottom" onclick={() => (menuOpen = false)}>
+					{@render glyph('close', 14)}
+				</IconButton>
+			</div>
+			{@render navList(false)}
+			<div class="side-foot">
+				{@render navItem(SETTINGS_ENTRY, false)}
+				{@render accountMenu(false)}
 			</div>
 		</aside>
 	{/if}
@@ -874,36 +930,88 @@
 			<button class="icon-btn menu-btn" aria-label="Open menu" aria-expanded={menuOpen} onclick={() => (menuOpen = true)}>
 				{@render glyph('menu', 16)}
 			</button>
+			{#if railed}
+				<span class="rail-open" transition:fade={{ duration: 120 }}>
+					<IconButton label="Expand sidebar" keys={['⌘', 'B']} side="bottom" onclick={() => (railed = false)}>
+						{@render panelIcon()}
+					</IconButton>
+				</span>
+			{/if}
 
 			<div class="breadcrumb">
-				<span>Acme Labs</span>
+				<span>{workspaceLabel}</span>
 				<span class="sep">/</span>
 				<span>Analytics</span>
 				<span class="sep">/</span>
-				<span class="current">Overview</span>
+				<span class="current">{activeNav}</span>
 			</div>
 
 			<div class="search">
 				{@render glyph('search', 14)}
-				<input bind:this={searchEl} type="search" placeholder="Search metrics, reports…" aria-label="Search" />
+				<input bind:this={searchEl} bind:value={query} type="search" placeholder="Filter top pages…" aria-label="Filter top pages" />
 				<kbd>/</kbd>
 			</div>
 
 			<span class="live-chip"><span class="live-dot"></span>Live</span>
 
 			<div class="top-actions">
-				<button class="icon-btn" aria-label="Refresh data" onclick={() => notify('Data refreshed · 0.31s')}>
+				<IconButton label="Refresh data" side="bottom" class={refreshing ? 'spinning' : ''} aria-busy={refreshing} onclick={refresh}>
 					{@render glyph('refresh', 15)}
-				</button>
-				<button class="icon-btn" aria-label="Notifications">
-					{@render glyph('alerts', 15)}
-					<span class="notif-dot"></span>
-				</button>
-				<button class="icon-btn" aria-label="Help">{@render glyph('help', 15)}</button>
+				</IconButton>
+				<DropdownMenu.Root>
+					<Tip label="Notifications" side="bottom">
+						{#snippet trigger({ props: tipProps })}
+							<DropdownMenu.Trigger {...tipProps}>
+								{#snippet child({ props })}
+									<button {...props} class="icon-btn" type="button" aria-label="Notifications, {unreadCount} unread">
+										{@render glyph('alerts', 15)}
+										{#if unreadCount}<span class="notif-dot" out:fade={{ duration: 150 }}></span>{/if}
+									</button>
+								{/snippet}
+							</DropdownMenu.Trigger>
+						{/snippet}
+					</Tip>
+					<MenuContent align="end" minWidth={290}>
+						<DropdownMenu.Group>
+							<DropdownMenu.GroupHeading class="kit-menu-label">Notifications</DropdownMenu.GroupHeading>
+							{#each notifications as n (n.id)}
+								<MenuItem onSelect={() => (n.unread = false)} closeOnSelect={false} meta={n.time}>
+									<span class="note-dot" class:unread={n.unread}></span>
+									<span class="note-text">{n.text}</span>
+								</MenuItem>
+							{/each}
+						</DropdownMenu.Group>
+						<DropdownMenu.Separator class="kit-menu-sep" />
+						<MenuItem onSelect={markAllRead} disabled={unreadCount === 0}>Mark all as read</MenuItem>
+					</MenuContent>
+				</DropdownMenu.Root>
+				<DropdownMenu.Root>
+					<Tip label="Help" side="bottom">
+						{#snippet trigger({ props: tipProps })}
+							<DropdownMenu.Trigger {...tipProps}>
+								{#snippet child({ props })}
+									<button {...props} class="icon-btn" type="button" aria-label="Help">{@render glyph('help', 15)}</button>
+								{/snippet}
+							</DropdownMenu.Trigger>
+						{/snippet}
+					</Tip>
+					<MenuContent align="end" minWidth={220}>
+						<MenuItem onSelect={() => notify('⌘B sidebar · / filter pages · Esc clear')} keys={['?']}>Keyboard shortcuts</MenuItem>
+						<MenuItem onSelect={() => go('Sources')}>Connect a data source</MenuItem>
+						<MenuItem onSelect={() => notify('Support usually replies within a day')}>Contact support</MenuItem>
+					</MenuContent>
+				</DropdownMenu.Root>
 			</div>
 		</header>
 
 		<main class="page">
+			{#if activeNav !== 'Overview'}
+				<div class="placeholder" in:fade={{ duration: 160 }}>
+					<h1>{activeNav}</h1>
+					<p>This screen isn’t part of the demo. Overview has the working charts, filters and table.</p>
+					<button class="btn-ghost" type="button" onclick={() => go('Overview')}>Back to Overview</button>
+				</div>
+			{:else}
 			<div class="page-head">
 				<div>
 					<h1>Overview</h1>
@@ -919,11 +1027,21 @@
 							</button>
 						{/each}
 					</div>
-					<button class="btn-ghost" onclick={() => notify('Snapshot copied to clipboard')}>
-						{@render glyph('share', 13)}
-						Share
-					</button>
-					<button class="btn-primary" onclick={() => notify('Report draft created')}>
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props })}
+								<button {...props} class="btn-ghost" type="button">
+									{@render glyph('share', 13)}
+									Share
+								</button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<MenuContent align="end" minWidth={208}>
+							<MenuItem onSelect={() => copyText(`https://sift.app/${workspace}/overview?range=${range}`, 'Link copied')}>Copy link</MenuItem>
+							<MenuItem onSelect={exportPages} meta=".csv">Export top pages</MenuItem>
+						</MenuContent>
+					</DropdownMenu.Root>
+					<button class="btn-primary" onclick={() => { go('Reports'); notify('Draft report created'); }}>
 						{@render glyph('plus', 13)}
 						New report
 					</button>
@@ -931,28 +1049,9 @@
 			</div>
 
 			<div class="filters">
-				<button class="chip">
-					{@render glyph('calendar', 12)}
-					<span class="chip-label">Range</span>
-					<span class="chip-value">{meta.label}</span>
-					{@render glyph('chevron', 11)}
-				</button>
-				<button class="chip">
-					{@render glyph('users', 12)}
-					<span class="chip-label">Segment</span>
-					<span class="chip-value">All users</span>
-					{@render glyph('chevron', 11)}
-				</button>
-				<button class="chip">
-					{@render glyph('globe', 12)}
-					<span class="chip-label">Platform</span>
-					<span class="chip-value">Web + iOS</span>
-					{@render glyph('chevron', 11)}
-				</button>
-				<button class="chip dashed" onclick={() => notify('Filter added · Segment: Power users')}>
-					{@render glyph('plus', 11)}
-					Add filter
-				</button>
+				{@render chipMenu({ icon: 'calendar', key: 'Range', current: meta.label, value: range, onChange: setRange, options: RANGES.map((r) => ({ value: r, label: RANGE_META[r].label })) })}
+				{@render chipMenu({ icon: 'users', key: 'Segment', current: segmentOption.label, value: segment, onChange: (v) => (segment = v), options: SEGMENTS })}
+				{@render chipMenu({ icon: 'globe', key: 'Platform', current: platformOption.label, value: platform, onChange: (v) => (platform = v), options: PLATFORMS })}
 
 				<button class="chip toggle" class:on={compare} aria-pressed={compare} onclick={() => (compare = !compare)}>
 					<span class="checkbox">{#if compare}{@render glyph('check', 10)}{/if}</span>
@@ -1103,7 +1202,17 @@
 							<h2>Sessions by source</h2>
 							<p class="card-sub">{meta.label.toLowerCase()}</p>
 						</div>
-						<button class="icon-btn small" aria-label="Source options">{@render glyph('more', 14)}</button>
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger>
+								{#snippet child({ props })}
+									<button {...props} class="icon-btn small" type="button" aria-label="Source options">{@render glyph('more', 14)}</button>
+								{/snippet}
+							</DropdownMenu.Trigger>
+							<MenuContent align="end" minWidth={196}>
+								<MenuItem onSelect={() => copyText(sources.map((x) => `${x.name},${x.value}`).join('\n'), 'Sources copied as CSV')}>Copy as CSV</MenuItem>
+								<MenuItem onSelect={() => go('Sources')}>Manage sources</MenuItem>
+							</MenuContent>
+						</DropdownMenu.Root>
 					</div>
 
 					<div class="donut-wrap">
@@ -1174,7 +1283,7 @@
 
 					<div class="sources-foot">
 						<span>Paid social <strong>+18.4%</strong> week over week</span>
-						<button class="link" onclick={() => notify('Opening acquisition report')}>
+						<button class="link" onclick={() => go('Sources')}>
 							Details {@render glyph('arrow', 11)}
 						</button>
 					</div>
@@ -1189,8 +1298,12 @@
 							<p class="card-sub">By views · {meta.label.toLowerCase()}</p>
 						</div>
 						<div class="table-actions">
-							<span class="mini-chip">{@render glyph('filter', 11)} 3 filters</span>
-							<button class="link" onclick={() => notify('Opening all pages')}>
+							{#if query.trim()}
+								<button class="mini-chip" type="button" onclick={() => (query = '')} transition:fade={{ duration: 120 }}>
+									{@render glyph('filter', 11)} “{query.trim()}” · Clear
+								</button>
+							{/if}
+							<button class="link" onclick={() => go('Reports')}>
 								View all {@render glyph('arrow', 11)}
 							</button>
 						</div>
@@ -1222,7 +1335,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each pages as page (page.path)}
+							{#each visiblePages as page (page.path)}
 								<tr>
 									<td class="page-cell">
 										<span class="page-icon">/</span>
@@ -1243,6 +1356,10 @@
 										</svg>
 									</td>
 								</tr>
+							{:else}
+								<tr>
+									<td class="empty-row" colspan="5">No pages match “{query.trim()}”.</td>
+								</tr>
 							{/each}
 						</tbody>
 					</table>
@@ -1254,7 +1371,20 @@
 							<h2>Signup funnel</h2>
 							<p class="card-sub">Visitor → paid · {meta.label.toLowerCase()}</p>
 						</div>
-						<button class="mini-chip" onclick={() => notify('Filtered to all users')}>{@render glyph('segments', 11)} All users</button>
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger>
+								{#snippet child({ props })}
+									<button {...props} class="mini-chip" type="button">{@render glyph('segments', 11)} {segmentOption.label}</button>
+								{/snippet}
+							</DropdownMenu.Trigger>
+							<MenuContent align="end" minWidth={168}>
+								<DropdownMenu.RadioGroup bind:value={segment}>
+									{#each SEGMENTS as o (o.value)}
+										<MenuRadioItem value={o.value}>{o.label}</MenuRadioItem>
+									{/each}
+								</DropdownMenu.RadioGroup>
+							</MenuContent>
+						</DropdownMenu.Root>
 					</div>
 
 					<div class="funnel">
@@ -1276,7 +1406,7 @@
 
 					<div class="funnel-foot">
 						<span><strong>{int(funnel[4].value)}</strong> paid · {pct(funnel[4].ofFirst)} of visitors</span>
-						<button class="link" onclick={() => notify('Opening signup funnel')}>
+						<button class="link" onclick={() => go('Funnels')}>
 							Open funnel {@render glyph('arrow', 11)}
 						</button>
 					</div>
@@ -1291,17 +1421,45 @@
 				<span>{int(128_402 * factor)} events in range</span>
 				<span class="foot-right">All times in UTC</span>
 			</footer>
+			{/if}
 		</main>
 	</div>
 
 	{#if toast}
-		<div class="toast" role="status">
-			<span class="toast-icon">{@render glyph('check', 12)}</span>
-			<span>{toast}</span>
-			<button class="toast-action" onclick={() => (toast = null)}>Undo</button>
-		</div>
+		{#key toast.id}
+			<div class="toast" role="status" in:fly={{ y: 12, duration: 240, easing: cubicOut }} out:fade={{ duration: 140 }}>
+				<span class="toast-icon">{@render glyph('check', 12)}</span>
+				<span>{toast.text}</span>
+				{#if toast.undo}
+					<button class="toast-action" type="button" onclick={undoToast}>Undo</button>
+				{/if}
+			</div>
+		{/key}
 	{/if}
 </div>
+</KitRoot>
+
+{#snippet chipMenu(chip: { icon: IconName; key: string; current: string; value: string; onChange: (value: string) => void; options: readonly { value: string; label: string }[] })}
+	<DropdownMenu.Root>
+		<DropdownMenu.Trigger>
+			{#snippet child({ props })}
+				<button {...props} class="chip" type="button">
+					{@render glyph(chip.icon, 12)}
+					<span class="chip-label">{chip.key}</span>
+					<span class="chip-value">{chip.current}</span>
+					{@render glyph('chevron', 11)}
+				</button>
+			{/snippet}
+		</DropdownMenu.Trigger>
+		<MenuContent minWidth={180}>
+			<DropdownMenu.RadioGroup value={chip.value} onValueChange={chip.onChange}>
+				{#each chip.options as o (o.value)}
+					<MenuRadioItem value={o.value}>{o.label}</MenuRadioItem>
+				{/each}
+			</DropdownMenu.RadioGroup>
+		</MenuContent>
+	</DropdownMenu.Root>
+{/snippet}
 
 <style>
 	.dash {
@@ -1329,7 +1487,8 @@
 		--spring: cubic-bezier(0.2, 0.9, 0.25, 1.05);
 
 		display: flex;
-		min-height: 100vh;
+		height: 100dvh;
+		overflow: hidden;
 		background: var(--bg);
 		color: var(--fg);
 		font-family: var(--sans);
@@ -1343,7 +1502,37 @@
 		letter-spacing: 0;
 	}
 
-	.dash button {
+	/* KitRoot wrapper: no box of its own, it only themes the portalled menus and tooltips */
+	:global(.sift-kit) {
+		display: contents;
+		font-family: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+		--kit-pop-bg: #1a1a1a;
+		--kit-pop-text: #f3f3f4;
+		--kit-pop-muted: #a3a3aa;
+		--kit-pop-line: rgb(255 255 255 / 0.08);
+		--kit-pop-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 12px 32px -8px rgb(0 0 0 / 0.6), 0 4px 8px -4px rgb(0 0 0 / 0.4);
+		--kit-pop-radius: 10px;
+		--kit-item-radius: 6px;
+		--kit-item-height: 28px;
+		--kit-item-hover: rgb(255 255 255 / 0.06);
+		--kit-accent: #a5d8ff;
+		--kit-focus: rgb(165 216 255 / 0.6);
+		--kit-danger: #ff9c9c;
+		--kit-success: #6ee7b0;
+		--kit-tip-bg: #262626;
+		--kit-tip-text: #f3f3f4;
+		--kit-key-bg: rgb(255 255 255 / 0.08);
+		--kit-icon-btn-size: 28px;
+		--kit-icon-btn-radius: 7px;
+		--kit-icon-btn-color: #a3a3aa;
+		--kit-icon-btn-hover-bg: rgb(255 255 255 / 0.055);
+		--kit-icon-btn-hover-color: #f3f3f4;
+		--kit-handle: rgb(255 255 255 / 0.12);
+		--kit-handle-active: #a5d8ff;
+	}
+
+	/* zero-specificity reset so each button class below sets its own padding */
+	.dash :where(button) {
 		font-family: inherit;
 		color: inherit;
 		border: 0;
@@ -1357,7 +1546,8 @@
 			filter 150ms var(--ease);
 	}
 
-	.dash :focus-visible {
+	/* text fields draw their ring on the wrapper (.search), so they're left out here */
+	.dash :focus-visible:not(input, textarea) {
 		outline: none;
 		box-shadow:
 			0 0 0 2px var(--bg),
@@ -1368,30 +1558,86 @@
 		font-family: inherit;
 	}
 
+	/*
+	 * Inset shell: the sidebar has no fill of its own and shares the app tint; the content is a
+	 * raised panel 8px from the viewport. Rows share one icon column (centred 30px from the edge)
+	 * and one text column (48px), so nothing shifts sideways when the sidebar folds to a rail.
+	 */
+	:global(.dash .side-col) {
+		height: 100dvh;
+	}
 	.side {
-		width: 216px;
-		flex: none;
-		height: 100vh;
-		position: sticky;
-		top: 0;
+		position: relative;
 		display: flex;
 		flex-direction: column;
-		background: var(--bg-side);
-		border-right: 1px solid var(--line);
-		padding: 12px 10px 10px;
+		height: 100%;
+		padding: 10px;
+		overflow: hidden auto;
+		white-space: nowrap;
+	}
+	.fades {
+		transition: opacity 150ms var(--ease);
+	}
+	.rail .fades {
+		opacity: 0;
+		pointer-events: none;
 	}
 
-	.brand {
+	/* one highlight that slides between items (positioned by the navPill action) */
+	.nav-pill {
+		position: absolute;
+		top: 0;
+		left: 10px;
+		right: 10px;
+		height: var(--pill-h, 32px);
+		border-radius: 8px;
+		background: rgb(255 255 255 / 0.06);
+		box-shadow:
+			inset 0 0 0 1px rgb(255 255 255 / 0.06),
+			0 1px 2px rgb(0 0 0 / 0.4);
+		transform: translateY(var(--pill-y, 0));
+		pointer-events: none;
+	}
+	.side:global([data-pill-ready]) .nav-pill {
+		transition:
+			transform 260ms var(--spring),
+			opacity 150ms var(--ease);
+	}
+	.side:global([data-pill='none']) .nav-pill {
+		opacity: 0;
+	}
+
+	.side-top {
 		display: flex;
 		align-items: center;
-		gap: 9px;
-		padding: 2px 4px 10px;
+		gap: 2px;
+		margin-bottom: 14px;
 	}
-
-	.logo {
-		width: 26px;
-		height: 26px;
+	.side-toggle,
+	.rail-open {
+		display: flex;
+	}
+	.brand {
+		flex: 1;
+		min-width: 0;
+		height: 40px;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 0 6px 0 8px;
 		border-radius: 8px;
+		text-align: start;
+		overflow: hidden;
+	}
+	.brand:hover,
+	.brand[data-state='open'] {
+		background: rgb(255 255 255 / 0.04);
+	}
+	.logo {
+		width: 24px;
+		height: 24px;
+		flex: none;
+		border-radius: 7px;
 		display: grid;
 		place-items: center;
 		background: linear-gradient(160deg, #d6efff, #93cdf2);
@@ -1399,106 +1645,104 @@
 			inset 0 1px 0 rgba(255, 255, 255, 0.75),
 			0 1px 2px rgba(0, 0, 0, 0.5);
 	}
-
 	.brand-text {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		line-height: 1.15;
-		min-width: 0;
+		line-height: 1.2;
 	}
-
 	.brand-name {
 		font-size: 13px;
 		font-weight: 500;
 		letter-spacing: -0.01em;
 	}
-
 	.brand-workspace {
-		font-size: 10px;
+		font-size: 11px;
 		color: var(--fg-3);
-		letter-spacing: 0.02em;
-	}
-
-	.ws-switch {
-		margin-left: auto;
-		width: 22px;
-		height: 22px;
-		display: grid;
-		place-items: center;
-		border-radius: 6px;
-		color: var(--fg-3);
-	}
-
-	.ws-switch:hover {
-		background: rgba(255, 255, 255, 0.05);
-		color: var(--fg);
-	}
-
-	.group {
-		margin: 0;
-		padding: 14px 8px 5px;
-		font-size: 9.5px;
-		font-weight: 500;
-		letter-spacing: 0.09em;
-		text-transform: uppercase;
-		color: var(--fg-3);
-	}
-
-	.nav-item {
-		position: relative;
-		width: 100%;
-		height: 30px;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 0 8px;
-		border-radius: 7px;
-		color: var(--fg-2);
-		font-size: 12.5px;
-	}
-
-	.nav-item:hover {
-		background: rgba(255, 255, 255, 0.04);
-		color: var(--fg);
-	}
-
-	.nav-item.active {
-		background: #1a1a1a;
-		color: var(--fg);
-		box-shadow:
-			inset 0 0 0 1px rgba(255, 255, 255, 0.08),
-			0 1px 2px rgba(0, 0, 0, 0.45);
-	}
-
-	.nav-item.active::before {
-		content: '';
-		position: absolute;
-		left: 0;
-		top: 9px;
-		bottom: 9px;
-		width: 2px;
-		border-radius: 2px;
-		background: var(--accent);
-	}
-
-	.nav-label {
-		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
+	.brand-chev {
+		display: grid;
+		flex: none;
+		color: var(--fg-3);
+	}
 
+	.nav {
+		display: flex;
+		flex-direction: column;
+		gap: 18px;
+	}
+	.nav-group {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.group {
+		margin: 0 0 2px;
+		padding: 0 12px;
+		font-size: 11.5px;
+		font-weight: 500;
+		line-height: 20px;
+		color: var(--fg-3);
+	}
+	.nav-item {
+		position: relative;
+		width: 100%;
+		height: 32px;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 0 10px 0 12px;
+		border-radius: 8px;
+		color: var(--fg-2);
+		font-size: 13px;
+		text-align: start;
+	}
+	.nav-item svg {
+		flex: none;
+		color: var(--fg-3);
+		transition: color 150ms var(--ease);
+	}
+	.nav-item:hover {
+		background: rgb(255 255 255 / 0.035);
+		color: var(--fg);
+	}
+	.nav-item[aria-current='page'] {
+		color: var(--fg);
+	}
+	/* the sliding pill already paints the current item */
+	.nav-item[aria-current='page']:hover {
+		background: transparent;
+	}
+	.nav-item:hover svg,
+	.nav-item[aria-current='page'] svg {
+		color: var(--fg);
+	}
+	.nav-swatch {
+		width: 10px;
+		height: 10px;
+		margin: 0 3px;
+		flex: none;
+		border-radius: 3px;
+	}
+	.nav-label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 	.nav-count {
 		margin-left: auto;
-		font-size: 10px;
-		height: 17px;
-		min-width: 17px;
+		font-size: 10.5px;
+		height: 18px;
+		min-width: 18px;
 		padding: 0 5px;
 		display: grid;
 		place-items: center;
 		border-radius: 5px;
-		color: var(--accent);
-		background: var(--accent-soft);
-		box-shadow: inset 0 0 0 1px rgba(165, 216, 255, 0.16);
+		color: var(--fg-2);
+		background: rgb(255 255 255 / 0.06);
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -1511,7 +1755,6 @@
 		position: relative;
 		flex: none;
 	}
-
 	.live-dot::after {
 		content: '';
 		position: absolute;
@@ -1520,7 +1763,13 @@
 		border: 1px solid rgba(110, 231, 176, 0.5);
 		animation: ping 2.4s var(--ease) infinite;
 	}
-
+	/* in the rail the dot sits on the icon's corner instead of the row's end */
+	.rail .nav-item .live-dot {
+		position: absolute;
+		left: 26px;
+		top: 8px;
+		margin: 0;
+	}
 	@keyframes ping {
 		0% {
 			transform: scale(0.7);
@@ -1537,37 +1786,33 @@
 		margin-top: auto;
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
-		padding-top: 10px;
+		gap: 2px;
+		padding-top: 14px;
 	}
-
 	.health {
-		padding: 8px 9px;
-		border-radius: 8px;
-		background: #141414;
+		margin-bottom: 8px;
+		padding: 9px 10px;
+		border-radius: 10px;
+		background: rgb(255 255 255 / 0.025);
 		box-shadow: inset 0 0 0 1px var(--line);
 	}
-
 	.health-top {
 		display: flex;
 		justify-content: space-between;
-		font-size: 10.5px;
+		font-size: 11px;
 		color: var(--fg-2);
 	}
-
 	.health-value {
 		color: var(--fg);
 		font-variant-numeric: tabular-nums;
 	}
-
 	.health-bar {
 		height: 3px;
-		margin: 6px 0 5px;
+		margin: 7px 0 6px;
 		border-radius: 2px;
 		background: #242424;
 		overflow: hidden;
 	}
-
 	.health-bar span {
 		display: block;
 		height: 100%;
@@ -1575,58 +1820,100 @@
 		border-radius: 2px;
 		background: linear-gradient(90deg, #57a9d6, var(--accent));
 	}
-
 	.health-note {
 		margin: 0;
-		font-size: 9.5px;
+		font-size: 10.5px;
 		color: var(--fg-3);
 	}
 
 	.user {
+		width: 100%;
+		height: 44px;
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 8px 6px 2px;
-		border-top: 1px solid var(--line);
+		gap: 6px;
 		margin-top: 4px;
+		padding: 0 8px;
+		border-radius: 8px;
+		text-align: start;
+		overflow: hidden;
 	}
-
+	.user:hover,
+	.user[data-state='open'] {
+		background: rgb(255 255 255 / 0.04);
+	}
 	.avatar {
-		width: 26px;
-		height: 26px;
+		width: 24px;
+		height: 24px;
 		flex: none;
 		border-radius: 50%;
 		display: grid;
 		place-items: center;
-		font-size: 10px;
+		font-size: 9.5px;
 		font-weight: 500;
-		letter-spacing: 0.01em;
 		color: #bfe3fb;
 		background: #21384a;
 		box-shadow: inset 0 0 0 1px rgba(165, 216, 255, 0.18);
 	}
-
 	.user-text {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		line-height: 1.25;
-		min-width: 0;
 	}
-
 	.user-name {
-		font-size: 11.5px;
+		font-size: 12.5px;
 		font-weight: 500;
 	}
-
 	.user-mail {
-		font-size: 9.5px;
+		font-size: 11px;
 		color: var(--fg-3);
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
+	.user-more {
+		display: grid;
+		flex: none;
+		color: var(--fg-3);
+	}
 
-	.user .icon-btn {
-		margin-left: auto;
+	.note-dot {
+		width: 6px;
+		height: 6px;
+		flex: none;
+		border-radius: 9999px;
+		transition: background 150ms var(--kit-ease-out);
+	}
+	.note-dot.unread {
+		background: var(--kit-accent);
+	}
+	.note-text {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.placeholder {
+		max-width: 420px;
+		padding: 64px 0;
+	}
+	.placeholder h1 {
+		margin: 0;
+		font-size: 20px;
+		font-weight: 600;
+		letter-spacing: -0.02em;
+	}
+	.placeholder p {
+		margin: 8px 0 18px;
+		color: var(--fg-2);
+		line-height: 1.5;
+	}
+	.empty-row {
+		padding: 18px 0;
+		color: var(--fg-2);
+		text-align: start;
 	}
 
 	.main {
@@ -1634,6 +1921,13 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
+		margin: 8px 8px 8px 0;
+		border-radius: 14px;
+		background: #0f0f0f;
+		box-shadow:
+			0 0 0 1px var(--line),
+			0 1px 3px rgb(0 0 0 / 0.5);
+		overflow: hidden auto;
 	}
 
 	.topbar {
@@ -1646,7 +1940,7 @@
 		align-items: center;
 		gap: 10px;
 		padding: 0 20px;
-		background: rgba(11, 11, 11, 0.84);
+		background: rgba(15, 15, 15, 0.84);
 		border-bottom: 1px solid var(--line);
 		backdrop-filter: blur(12px);
 	}
@@ -1755,72 +2049,18 @@
 		z-index: 60;
 		background: rgba(0, 0, 0, 0.55);
 		backdrop-filter: blur(2px);
-		animation: fade 160ms var(--ease);
 	}
-
 	.drawer {
 		position: fixed;
-		top: 0;
-		bottom: 0;
-		left: 0;
+		inset: 0 auto 0 0;
 		z-index: 61;
-		width: 252px;
-		display: flex;
-		flex-direction: column;
-		padding: 12px 10px 10px;
-		background: var(--bg-side);
+		width: min(280px, 86vw);
+		background: #0e0e0e;
 		border-right: 1px solid var(--line);
 		box-shadow: 20px 0 60px rgba(0, 0, 0, 0.55);
-		animation: drawer-in 220ms var(--ease);
-		overflow-y: auto;
 	}
-
-	.drawer .nav-label,
-	.drawer .group,
-	.drawer .nav-count {
-		display: block;
-	}
-
-	.drawer .brand-text {
-		display: flex;
-	}
-
-	.drawer .ws-switch {
-		display: grid;
-		width: 28px;
-		height: 28px;
-	}
-
-	.drawer .nav-count {
-		display: grid;
-	}
-
 	.drawer .nav-item {
-		justify-content: flex-start;
-		padding: 0 8px;
-		height: 32px;
-	}
-
-	.drawer .nav-item .live-dot {
-		position: relative;
-		margin-left: auto;
-	}
-
-	.drawer .nav-item.active::before {
-		left: 0;
-	}
-
-	@keyframes fade {
-		from {
-			opacity: 0;
-		}
-	}
-
-	@keyframes drawer-in {
-		from {
-			transform: translateX(-16px);
-			opacity: 0;
-		}
+		height: 40px;
 	}
 
 	.icon-btn {
@@ -2027,17 +2267,6 @@
 	.chip-value {
 		color: var(--fg);
 		font-weight: 500;
-	}
-
-	.chip.dashed {
-		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-		border-radius: 7px;
-		color: var(--fg-2);
-		background: transparent;
-	}
-
-	.chip.dashed:hover {
-		background: rgba(255, 255, 255, 0.03);
 	}
 
 	.chip.toggle {
@@ -2897,7 +3126,7 @@
 		box-shadow:
 			0 0 0 1px rgba(255, 255, 255, 0.1),
 			0 16px 36px rgba(0, 0, 0, 0.6);
-		animation: toast-in 300ms var(--ease);
+		transform: translateX(-50%);
 	}
 
 	.toast-icon {
@@ -2926,14 +3155,12 @@
 		background: rgba(255, 255, 255, 0.13);
 	}
 
-	@keyframes toast-in {
-		from {
-			opacity: 0;
-			transform: translate(-50%, 10px) scale(0.96);
-		}
+	:global(.dash .kit-icon-btn.spinning svg) {
+		animation: spin 700ms var(--ease);
+	}
+	@keyframes spin {
 		to {
-			opacity: 1;
-			transform: translate(-50%, 0) scale(1);
+			transform: rotate(360deg);
 		}
 	}
 
@@ -2944,54 +3171,6 @@
 	}
 
 	@media (max-width: 1180px) {
-		.side {
-			width: 60px;
-			padding: 12px 8px;
-			align-items: center;
-		}
-
-		.brand-text,
-		.nav-label,
-		.nav-count,
-		.group,
-		.health,
-		.user-text {
-			display: none;
-		}
-
-		.brand {
-			padding-bottom: 14px;
-		}
-
-		.ws-switch {
-			display: none;
-		}
-
-		.nav-item {
-			justify-content: center;
-			padding: 0;
-			height: 34px;
-		}
-
-		.nav-item .live-dot {
-			position: absolute;
-			top: 7px;
-			right: 9px;
-		}
-
-		.nav-item.active::before {
-			left: -8px;
-		}
-
-		.user {
-			border-top: 0;
-			padding: 8px 0 2px;
-		}
-
-		.user .icon-btn {
-			display: none;
-		}
-
 		.kpis {
 			grid-template-columns: repeat(5, minmax(0, 1fr));
 		}
@@ -3044,8 +3223,15 @@
 	}
 
 	@media (max-width: 860px) {
-		.side {
+		:global(.dash .side-col),
+		.rail-open {
 			display: none;
+		}
+
+		.main {
+			margin: 0;
+			border-radius: 0;
+			box-shadow: none;
 		}
 
 		.topbar .icon-btn.menu-btn {

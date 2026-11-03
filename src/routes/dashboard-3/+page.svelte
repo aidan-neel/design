@@ -5,6 +5,7 @@
 	import MenuContent from '#lib/kit/MenuContent.svelte';
 	import MenuItem from '#lib/kit/MenuItem.svelte';
 	import MenuRadioItem from '#lib/kit/MenuRadioItem.svelte';
+	import { navPill } from '#lib/kit/nav-pill.js';
 	import Sidebar from '#lib/kit/Sidebar.svelte';
 	import Tip from '#lib/kit/Tip.svelte';
 	import { DropdownMenu, Switch } from 'bits-ui';
@@ -263,9 +264,11 @@
 <KitRoot class="dash-kit">
 <div class="dash">
 	<!-- ===================== sidebar ===================== -->
-	<Sidebar bind:collapsed={railed} defaultWidth={212} minWidth={188} maxWidth={320} collapsedWidth={56} class="side-col">
+	<Sidebar bind:collapsed={railed} defaultWidth={212} minWidth={188} maxWidth={320} collapsedWidth={60} class="side-col">
 		{#snippet children({ collapsed })}
-			<aside class="side" class:rail={collapsed}>
+			<aside class="side" class:rail={collapsed} use:navPill={activeView}>
+				<span class="nav-pill" aria-hidden="true"></span>
+				<div class="side-top">
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
 						{#snippet child({ props })}
@@ -289,6 +292,14 @@
 						<MenuItem onSelect={() => showToast('Invite link copied')}>Invite teammates</MenuItem>
 					</MenuContent>
 				</DropdownMenu.Root>
+				{#if !collapsed}
+					<span class="side-toggle" transition:fade={{ duration: 120 }}>
+						<IconButton label="Collapse sidebar" keys={['⌘', 'B']} side="bottom" onclick={() => (railed = true)}>
+							{@render panelIcon()}
+						</IconButton>
+					</span>
+				{/if}
+				</div>
 
 				{#each nav as group (group.group)}
 					<span class="nav-label">{group.group}</span>
@@ -299,7 +310,6 @@
 									<button
 										{...props}
 										class="nav-item"
-										class:active={activeView === item.label}
 										aria-current={activeView === item.label ? 'page' : undefined}
 										aria-label={collapsed ? item.label : undefined}
 										type="button"
@@ -355,9 +365,13 @@
 	<!-- ===================== main ===================== -->
 	<div class="main">
 		<header class="topbar">
-			<IconButton label={railed ? 'Expand sidebar' : 'Collapse sidebar'} keys={['⌘', 'B']} side="bottom" class="rail-toggle" onclick={() => (railed = !railed)}>
-				<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M9 3v18" /></svg>
-			</IconButton>
+			{#if railed}
+				<span class="rail-open" transition:fade={{ duration: 120 }}>
+					<IconButton label="Expand sidebar" keys={['⌘', 'B']} side="bottom" onclick={() => (railed = false)}>
+						{@render panelIcon()}
+					</IconButton>
+				</span>
+			{/if}
 			<div class="crumbs">
 				<span>Analytics</span>
 				<span class="crumb-sep">/</span>
@@ -693,6 +707,10 @@
 </div>
 </KitRoot>
 
+{#snippet panelIcon()}
+	<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /></svg>
+{/snippet}
+
 {#snippet chipMenu(key: string, current: string, value: string, onChange: (value: string) => void, options: readonly { value: string; label: string }[])}
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger>
@@ -902,8 +920,9 @@
 
 	/* ---------- sidebar ---------- */
 	/*
-	 * Every row shares one icon column (centred 28px from the edge) and one text column (48px),
-	 * so the tile, nav icons and avatar line up and stay put when the sidebar collapses to a rail.
+	 * Flush shell: the sidebar is its own surface with a hairline, flush to the viewport edge.
+	 * Rows share one icon column (centred 30px from the edge) and one text column (48px),
+	 * so the tile, nav icons and avatar stay put when the sidebar folds to a rail.
 	 */
 	:global(.dash .side-col) {
 		position: sticky;
@@ -911,10 +930,11 @@
 		height: 100dvh;
 	}
 	.side {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		padding: 12px 10px 10px;
+		padding: 10px;
 		background: var(--surface);
 		border-right: 1px solid var(--line);
 		overflow: hidden auto;
@@ -929,13 +949,49 @@
 		pointer-events: none;
 	}
 
-	.ws {
+	/* one highlight that slides between items (positioned by the navPill action) */
+	.nav-pill {
+		position: absolute;
+		top: 0;
+		left: 10px;
+		right: 10px;
+		height: var(--pill-h, 32px);
+		border-radius: 8px;
+		background: #1f1f1f;
+		box-shadow:
+			inset 0 0 0 1px var(--line),
+			inset 0 1px 0 rgb(255 255 255 / 0.04);
+		transform: translateY(var(--pill-y, 0));
+		pointer-events: none;
+	}
+	.side:global([data-pill-ready]) .nav-pill {
+		transition:
+			transform 260ms cubic-bezier(0.2, 0.9, 0.25, 1.05),
+			opacity 150ms var(--ease);
+	}
+	.side:global([data-pill='none']) .nav-pill {
+		opacity: 0;
+	}
+
+	.side-top {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		width: 100%;
+		gap: 2px;
+		margin-bottom: 4px;
+	}
+	.side-toggle,
+	.rail-open {
+		display: flex;
+	}
+	.ws {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		gap: 6px;
+		height: 40px;
 		min-width: 0;
-		padding: 6px;
+		padding: 0 6px 0 8px;
+		overflow: hidden;
 		border: 0;
 		border-radius: 8px;
 		background: none;
@@ -975,9 +1031,9 @@
 	}
 
 	.nav-label {
-		padding: 0 10px;
+		padding: 0 12px;
 		transition: opacity 150ms var(--ease);
-		margin: 14px 0 4px;
+		margin: 18px 0 4px;
 		font-size: 11px;
 		font-weight: 500;
 		letter-spacing: 0.05em;
@@ -987,17 +1043,18 @@
 	.nav {
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
+		gap: 2px;
 	}
 	.nav-item {
+		position: relative;
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: 10px;
 		width: 100%;
-		height: 28px;
-		padding: 0 10px;
+		height: 32px;
+		padding: 0 10px 0 12px;
 		border: 0;
-		border-radius: 7px;
+		border-radius: 8px;
 		background: none;
 		color: var(--fg2);
 		font-size: 13px;
@@ -1013,19 +1070,19 @@
 		transition: color 150ms var(--ease);
 	}
 	.nav-item:hover {
-		background: rgb(255 255 255 / 0.04);
+		background: rgb(255 255 255 / 0.035);
 		color: var(--fg);
 	}
-	.nav-item.active {
-		background: #1e1e1e;
+	.nav-item[aria-current='page'] {
 		color: var(--fg);
-		font-weight: 500;
-		box-shadow:
-			inset 0 0 0 1px var(--line),
-			inset 0 1px 0 rgb(255 255 255 / 0.04);
 	}
-	.nav-item.active svg {
-		color: var(--accent);
+	/* the sliding pill already paints the current item */
+	.nav-item[aria-current='page']:hover {
+		background: transparent;
+	}
+	.nav-item:hover svg,
+	.nav-item[aria-current='page'] svg {
+		color: var(--fg);
 	}
 	.nav-count {
 		margin-left: auto;
@@ -1106,10 +1163,12 @@
 	.me {
 		display: flex;
 		align-items: center;
-		gap: 9px;
+		gap: 6px;
 		width: 100%;
+		height: 44px;
 		margin-top: 8px;
-		padding: 7px 6px 7px 7px;
+		padding: 0 8px;
+		overflow: hidden;
 		border: 0;
 		border-radius: 8px;
 		background: none;
@@ -1137,7 +1196,12 @@
 		color: var(--fg3);
 	}
 	.me-more {
+		flex-shrink: 0;
 		color: var(--fg3);
+	}
+	.me .av {
+		width: 24px;
+		height: 24px;
 	}
 
 	/* ---------- avatars & tags ---------- */
@@ -1305,7 +1369,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	:global(.dash .rail-toggle) {
+	.rail-open {
 		margin-left: -6px;
 	}
 	.toast {
@@ -1991,7 +2055,7 @@
 	}
 	@media (max-width: 880px) {
 		:global(.dash .side-col),
-		:global(.dash .rail-toggle) {
+		.rail-open {
 			display: none;
 		}
 		.search {
