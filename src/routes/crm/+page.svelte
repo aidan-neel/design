@@ -358,9 +358,9 @@
 						<DropdownMenu.Trigger class="brand">
 							<span class="mark" aria-hidden="true">
 								<svg viewBox="0 0 24 24" fill="none">
-									<path d="M6 5.5h9.5A3.5 3.5 0 0 1 19 9v10.5H8.5A2.5 2.5 0 0 1 6 17V5.5Z" stroke="#10344f" stroke-width="1.7" />
-									<path d="M6 5.5A2.5 2.5 0 0 1 8.5 3H16" stroke="#10344f" stroke-width="1.7" stroke-linecap="round" />
-									<path d="M9 10h6M9 13.5h4" stroke="#10344f" stroke-width="1.7" stroke-linecap="round" />
+									<path d="M6 5.5h9.5A3.5 3.5 0 0 1 19 9v10.5H8.5A2.5 2.5 0 0 1 6 17V5.5Z" stroke="#ffffff" stroke-width="1.7" />
+									<path d="M6 5.5A2.5 2.5 0 0 1 8.5 3H16" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" />
+									<path d="M9 10h6M9 13.5h4" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" />
 								</svg>
 							</span>
 							<span class="brand-copy fades">
@@ -847,22 +847,22 @@
 		--ink-2: #737373;
 		--ink-3: #a3a3a3;
 		--line: #ececec;
-		--accent: #7eb6dc;
-		--accent-2: #6aa8d0;
-		--accent-ink: #10344f;
-		--accent-soft: #e8f3fa;
+		--accent: #3b82f6;
+		--accent-2: #2563eb;
+		--accent-ink: #1e3a8a;
+		--accent-soft: #eef3ff;
 		--ok: #15803d;
 		--ok-soft: #ecfdf3;
 		--warn: #b45309;
 		--warn-soft: #fff7e6;
 		--no: #b91c1c;
 		--no-soft: #fef2f2;
-		--deal: #1d4d6e;
+		--deal: #1e3a8a;
 		--lead-ink: #525252;
 		--lead-soft: #f4f4f4;
 		--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 		--shadow-btn: 0 1px 2px rgb(40 40 40 / 0.08), 0 0 0 1px var(--line);
-		--shadow-primary: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 1px 2px rgb(16 52 79 / 0.16), 0 0 0 1px #5a9cc4;
+		--shadow-primary: inset 0 1px 0 rgb(255 255 255 / 0.22), 0 1px 2px rgb(30 58 138 / 0.24), 0 0 0 1px #1d4ed8;
 		--shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 0 0 1px var(--line);
 		--shadow-pop: 0 0 0 1px rgb(0 0 0 / 0.06), 0 8px 24px -4px rgb(0 0 0 / 0.10), 0 2px 6px rgb(0 0 0 / 0.04);
 		--shadow-focus: 0 0 0 3px color-mix(in oklab, var(--accent), transparent 55%);
@@ -882,15 +882,15 @@
 		--kit-pop-radius: 12px;
 		--kit-item-radius: 8px;
 		--kit-item-height: 28px;
-		--kit-item-hover: #e4eef6;
-		--kit-accent: #10344f;
+		--kit-item-hover: #eef3ff;
+		--kit-accent: #1d4ed8;
 		--kit-success: #15803d;
 		--kit-danger: #b91c1c;
 		--kit-danger-bg: #fef2f2;
 		--kit-icon-btn-radius: 8px;
 		--kit-icon-btn-color: #737373;
 		--kit-icon-btn-hover-bg: rgb(0 0 0 / 0.05);
-		--kit-handle-active: #6aa8d0;
+		--kit-handle-active: #3b82f6;
 	}
 
 	.folio {
@@ -995,7 +995,7 @@
 		width: 28px;
 		height: 28px;
 		border-radius: 8px;
-		background: linear-gradient(#c5e0f2, #9ecce8);
+		background: linear-gradient(#3b82f6, #2563eb);
 		display: grid;
 		place-items: center;
 		box-shadow: var(--shadow-primary);
@@ -1231,8 +1231,8 @@
 		opacity: 0.5;
 	}
 	.btn-primary {
-		background: linear-gradient(#93c6e6, #6fafd6);
-		color: var(--accent-ink);
+		background: linear-gradient(#3b82f6, #2563eb);
+		color: #ffffff;
 		box-shadow: var(--shadow-primary);
 	}
 	.btn-secondary {
@@ -1267,7 +1267,7 @@
 
 	@media (hover: hover) and (pointer: fine) {
 		.btn-primary:hover {
-			background: linear-gradient(#86bddf, #64a4cc);
+			background: linear-gradient(#2f76f0, #1f57d8);
 		}
 		.btn-secondary:hover {
 			background: linear-gradient(#ffffff, #f2f2f2);
@@ -1308,9 +1308,9 @@
 			background 150ms cubic-bezier(0.23, 1, 0.32, 1);
 	}
 	:global(.folio-dialog .btn-primary) {
-		background: linear-gradient(#93c6e6, #6fafd6);
-		color: #10344f;
-		box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 1px 2px rgb(16 52 79 / 0.16), 0 0 0 1px #5a9cc4;
+		background: linear-gradient(#3b82f6, #2563eb);
+		color: #ffffff;
+		box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22), 0 1px 2px rgb(30 58 138 / 0.24), 0 0 0 1px #1d4ed8;
 	}
 	:global(.folio-dialog .btn-secondary) {
 		background: linear-gradient(#ffffff, #f7f7f7);
@@ -1802,8 +1802,8 @@
 	.spin {
 		width: 12px;
 		height: 12px;
-		border: 1.5px solid rgb(16 52 79 / 0.25);
-		border-top-color: var(--accent-ink);
+		border: 1.5px solid rgb(255 255 255 / 0.35);
+		border-top-color: #ffffff;
 		border-radius: 99px;
 		animation: spin 700ms linear infinite;
 	}
@@ -1893,7 +1893,7 @@
 		outline: none;
 	}
 	:global(.folio-item[data-highlighted]) {
-		background: #e4eef6;
+		background: #eef3ff;
 	}
 	:global(.folio-item .tick) {
 		width: 14px;
