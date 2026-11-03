@@ -252,6 +252,7 @@ export function Button({ variant = "secondary", className, ...props }) {
 .input:focus { outline:none; box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--ring); }
 .input[aria-invalid="true"] { box-shadow: 0 0 0 1px var(--danger), 0 0 0 4px rgb(220 38 38 / .15); }
 ```
+This works for a bare input. Once the input sits inside a visible box (search bar, composer, input with an icon or button), the **box** gets the ring and the input gets none. See §4.13.
 
 ### 4.3 Sidebar nav with sliding active pill (layout animation)
 A minimal version is below. For any real sidebar, use the full recipe in **§4.12**.
@@ -355,7 +356,11 @@ Models tend to get sidebars wrong. Read this whole recipe before you write a sid
 
 Tags: **[seen]** means it is visible in Marcel's images. **[inferred]** means it is estimated from screenshots that have no known pixel scale, so treat it as a ratio and not as an exact value. **[expert]** means it is a common product-design default, not taken from him.
 
-**Default layout: INSET sidebar (the user prefers this).** The app background is tinted (`#F7F7F7`–`#F4F4F5` light, or the app base in dark). The sidebar has **no background of its own**: it shares the app tint and reads as part of the background. The main content sits in a separate **inset panel**: white (or `#111` in dark), about 8px margin from the viewport top, right and bottom (and 0–8px from the sidebar), radius 12–16px, a subtle hairline plus a soft shadow (`0 0 0 1px rgb(0 0 0/.06), 0 1px 2px rgb(0 0 0/.04)`), with its own internal scroll. Several of his shells look like this [seen: Minto, Uniops, Timelines content panels]. A **flush sidebar** (full-height, edge to edge, separated by a hairline, content not inset) is only an alternative for dense tools or embedded views.
+**Two good shells. Pick one per product; neither is the default.**
+- **Inset:** the app background is tinted (`#F7F7F7`–`#F4F4F5` light, or the app base in dark). The sidebar has **no background of its own** and shares that tint. The content sits in a separate panel: white (or `#0f0f0f`–`#111` in dark), about 8px from the viewport top, right and bottom, radius 12–16px, a hairline plus a soft shadow (`0 0 0 1px rgb(0 0 0/.06), 0 1px 2px rgb(0 0 0/.04)`), with its own scroll [seen: Minto, Uniops, Timelines]. Suits calm products where the content should float: CRMs, inboxes, docs, AI chat.
+- **Flush:** the sidebar is a full-height surface of its own, edge to edge, separated from the content by one hairline; the content is not inset [seen: Snaplytics, the dark actions panel]. Suits dense tools that want every pixel: analytics, admin, IDE-like screens, embedded views. A flush sidebar is just as finished as an inset one when the rows, spacing and active pill are right.
+
+Whichever you pick, everything below (rows, columns, pill, collapse) is the same.
 
 **What his sidebars have in common [seen]** (see `sidebars/` files for 2106499785813360687, 2106500336081063986, 2110467790343737666_3, 2113384174924988778, 2113997498008117362)
 - **The sidebar is quieter than the content.** It sits on the canvas tone (`#F7F7F7`–`#FAFAFA` light, or the app's base in dark). The main content area is a white panel with a large radius and a hairline or soft shadow, so the *content* floats and the sidebar doesn't. He confirmed this in a reply: "different color sidebar than the main block" is "a great design pattern" (xpages p020).
@@ -389,15 +394,18 @@ Tags: **[seen]** means it is visible in Marcel's images. **[inferred]** means it
 
 **Behavior & motion [expert unless marked]**
 - **Hover:** the background goes to `rgb(0 0 0 / .04)` and the label goes to `#171717` within 120ms. There is no movement and no scale on nav items.
-- **Active change:** one shared pill slides between items using the §4.3 `layoutId` spring (`visualDuration .25, bounce .15`). Do not fade one pill out while another fades in.
-- **Collapse:** animate `width` (240→60) with 220ms `var(--ease-out)`. This is the one place where a width animation is acceptable. If you animate a CSS grid column, use `grid-template-columns`. Labels fade or clip with `opacity` over 120ms, and they must *not* wrap while shrinking (`white-space: nowrap; overflow: hidden`). Icons must not move horizontally, so keep a fixed icon column. In collapsed mode, show a tooltip on hover after 300ms and show none on touch. Save the collapsed state in localStorage. A toggle icon sits in the header, and `⌘B`/`[` is a nice touch.
+- **Active change:** one shared pill slides between items using the §4.3 `layoutId` spring (`visualDuration .25, bounce .15`). Do not fade one pill out while another fades in. Without Motion, measure the current item (`[aria-current="page"]`) against the scroll container and move one absolutely positioned pill with `transform`; skip the transition on first paint so it doesn't fly in from the top. Items need `position: relative` to paint above it.
+- **Rows share two columns.** Every row (switcher, nav items, settings, account) puts its icon, logo tile or avatar in one **icon column** and its text in one **text column**. With 10px sidebar padding and a 60px rail: 16px icons sit 12px into the row (centre 30px from the edge), 24px tiles and avatars 8px into the row (also centre 30px), and all text starts at 48px. Measure it (`getBoundingClientRect().left` on each icon and label) rather than eyeballing. Because the columns never move, collapsing to the rail is just hiding text [expert].
+- **Triggers are rows.** A workspace or account trigger is a full-width row button the same height and inset as the rows around it, with `text-align: start`. A narrower, shorter button whose label sits a few px off the nav labels below is the most common sidebar misalignment [expert].
+- **Collapse:** animate `width` (240→60) with 220ms `var(--ease-out)`. This is the one place where a width animation is acceptable. If you animate a CSS grid column, use `grid-template-columns`. Labels fade or clip with `opacity` over 120ms, and they must *not* wrap while shrinking (`white-space: nowrap; overflow: hidden`). Icons must not move horizontally, so keep a fixed icon column. In collapsed mode, show a tooltip on hover (right side, same delay as every other tooltip, §6) and show none on touch or when expanded. Save the collapsed state in localStorage. The toggle sits at the right of the switcher row while expanded and moves to the start of the topbar while collapsed; `⌘B` / `Ctrl+B` toggles from anywhere except rich-text fields, where it means bold.
+- **Resize [expert]:** a resizable sidebar has an 8px invisible handle on its right edge (`cursor: col-resize`) that shows a 2px line only after ~150ms of hover, so passing the edge doesn't flash it. Drag with pointer capture and clamp between a min and max (e.g. 200–320px). Dragging well past the minimum (~56px) snaps it to the rail or closed, dragging back out reopens it. Double-click resets the width. Turn the width transition off while dragging so it tracks the pointer 1:1. Make the handle a focusable `role="separator"` with `aria-valuenow`, ←/→ to resize, and Enter to toggle.
 - **Nesting:** expanding a group animates the height of the children (Motion `height: "auto"`) and rotates the chevron 90° in 150ms. Children stagger by 20ms at most.
 - **Workspace switcher:** opens a popover (§4.7) anchored to the switcher and scaling from 0.96 at its top-left origin. It lists workspaces with logo tiles and a check on the current one, followed by "Create workspace" and "Log out".
 - **Keyboard:** the whole sidebar is a `<nav aria-label>`. Items are `<a>` with `aria-current="page"`, and a group toggle is a `<button aria-expanded>`. Focus-visible gets a 2px ring inside the pill.
 - **Mobile (<768px):** hide the sidebar. Open it as a left drawer (85% width, max 320) over a dimmed `rgb(0 0 0 / .3)` scrim, slide it in with `translateX` 280ms `cubic-bezier(.32,.72,0,1)`, and close it by tapping the scrim, pressing Esc, or swiping. Items grow to 44px height. In consumer mobile apps use his **floating pill tab bar** with 4–5 items instead [seen].
 
 **Common mistakes (seen in AI output; fix all of them)**
-1. A flush white sidebar with the same white content and a 1px border down the middle. Default to INSET instead: the sidebar shares the tinted app background, and the content is a rounded, slightly elevated panel 8px from the viewport edges. Related mistakes: giving the sidebar its own fill or border, a panel with no radius or margin, a heavy shadow on the panel, or the whole page scrolling instead of the panel.
+1. A shell that is neither inset nor flush: an inset panel with no radius or margin, an inset sidebar that also has its own fill and border, a heavy shadow on the panel, or the whole page scrolling instead of the panel. Flush done badly is the same white on both sides of a 1px border with no tonal difference; give the sidebar its own surface (`#FAFAFA`, or one step up in dark).
 2. A colored active state (`bg-indigo-600 text-white`) or a 3px left accent bar.
 3. Mixed icon sizes and styles, or emoji used as icons. Icons that are not vertically centered with the text.
 4. Labels that wrap to two lines. Missing truncation (`text-overflow: ellipsis`).
@@ -474,7 +482,7 @@ function NavItem({ it, active, collapsed = false, onClick, expanded }) {
   const isActive = active === it.id;
   return (
     <button onClick={onClick} aria-current={isActive ? "page" : undefined} aria-expanded={expanded}
-      title={collapsed ? it.label : undefined}
+      /* collapsed: wrap this button in your Tooltip primitive (side="right"), not `title` */
       className="group relative flex h-8 w-full items-center gap-2 whitespace-nowrap rounded-lg px-2.5 text-[14px] text-[#737373] transition-colors duration-[120ms] hover:bg-black/[.04] hover:text-[#171717] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
       {isActive && <motion.span layoutId="sb-pill" className="absolute inset-0 rounded-lg bg-white shadow-[var(--shadow-btn)]"
         transition={{ type: "spring", visualDuration: .25, bounce: .15 }} />}
@@ -487,7 +495,7 @@ function NavItem({ it, active, collapsed = false, onClick, expanded }) {
   );
 }
 ```
-Inset shell layout (default):
+Inset shell layout:
 ```tsx
 <div className="flex h-dvh overflow-hidden bg-[#F7F7F7]">          {/* tinted app bg, shared by sidebar */}
   <Sidebar />
@@ -496,7 +504,42 @@ Inset shell layout (default):
                    max-md:m-0 max-md:rounded-none">…</main>       {/* inset, slightly elevated panel */}
 </div>
 ```
-Flush alternative: drop the margins and radius on `<main>`, give the sidebar `bg-white border-r border-black/[.06]`. On mobile, render the same `<nav>` inside a §4.8 sheet from the left, and put a hamburger in a sticky 56px top bar.
+Flush shell: drop the margins and radius on `<main>` and keep it white, and give the sidebar its own surface: `bg-[#FAFAFA] border-r border-black/[.06]` (one step up from the base in dark). On mobile, render the same `<nav>` inside a §4.8 sheet from the left, and put a hamburger in a sticky 56px top bar.
+
+---
+
+### 4.13 Focus rings: one ring, on the box you can see [expert]
+Agents break focus in two opposite ways: they delete it (`outline: none` with nothing in its place, which X users now treat as an error [X]) or they draw it twice. Every focusable control shows exactly **one** ring, and it traces the shape the user sees as the control.
+
+- **Composite fields get one ring, on the outer box.** A search bar, chat composer, input with an icon, or input with a button inside is one control to the user. Draw the ring on the wrapper with `:focus-within` (or `:has(textarea:focus)` when the box also holds buttons that shouldn't light it up) and give the inner `input`/`textarea` `outline: none`. The classic failure is the textarea's ring sitting a few px inside the composer's ring: two concentric, misaligned rounded rectangles.
+- **Text fields are not buttons.** A global rule like `.app :focus-visible { outline: 2px solid }` also hits inputs, which match `:focus-visible` on mouse click as well. Scope it: `:focus-visible:not(input, textarea, [contenteditable])`, and let fields style their own wrapper.
+- **Match the shape.** `outline` follows `border-radius` in all current browsers; use `outline-offset: 2px` for buttons and `-2px` (inset) for rows inside a scroll container, where an outer ring gets clipped by `overflow: hidden/auto`.
+- **Mind the cascade.** Unlayered CSS beats Tailwind's layered utilities and resets, and scoped component CSS doesn't reach child components. Check that the ring you wrote is the one that renders (inspect the computed `outline` and `box-shadow`), especially on third-party primitives.
+- **Menus and lists use their highlight, not a ring.** Menu items, options and command rows show focus through the same background as hover (`[data-highlighted]`). A ring there doubles up.
+- **Error state replaces the ring color, not the ring.** `aria-invalid` turns the same ring red; it doesn't add a second one.
+
+```css
+.composer { border-radius: 16px; box-shadow: 0 0 0 1px var(--line); transition: box-shadow 150ms var(--ease-out); }
+.composer:has(textarea:focus) { box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--ring); }
+.composer textarea { outline: none; }
+.app :focus-visible:not(input, textarea) { outline: 2px solid var(--accent); outline-offset: 2px; }
+```
+**Check it:** Tab through the screen and screenshot every input, button and row. Each shows one ring, aligned to its own edge, not clipped.
+
+### 4.14 Field errors that move, not jump [expert]
+- Validate on blur or submit, never on every keystroke. Once a field is in error, clear the error **as they type** the moment it becomes valid ("reward early, punish late").
+- The message animates its height open: wrap it in a grid that goes `grid-template-rows: 0fr → 1fr` with opacity `0 → 1` and `translateY(-4px) → 0` over ~200ms. Nothing below the field jumps.
+- Keep the last message rendered while it animates closed, so the text doesn't vanish before the box collapses.
+- The ring turns red with the same transition as focus (§4.13). One short line in danger color with a 14px alert icon, directly under the field [X: "form errors next to the field"].
+- On a failed sign-in, shake the form once (translateX ±6px, ~320ms) and select the password. Skip the shake under reduced motion. Don't shake for ordinary validation.
+- Focus the first invalid field on submit. Announce messages with `aria-live="polite"` and link them with `aria-describedby`.
+
+```css
+.field-error { display: grid; grid-template-rows: 0fr; opacity: 0; transform: translateY(-4px);
+  transition: grid-template-rows 200ms var(--ease-out), opacity 160ms var(--ease-out), transform 200ms var(--ease-out); }
+.field-error[data-visible] { grid-template-rows: 1fr; opacity: 1; transform: none; }
+.field-error > div { overflow: hidden; }
+```
 
 ---
 
@@ -621,7 +664,7 @@ Every interactive element must have these states. Go through them one by one.
 
 - [ ] **Hover** (pointer devices only): color/bg shift 100–150ms. Cursor pointer on clickable non-buttons. No layout shift.
 - [ ] **Press**: `scale(0.97)` (buttons) or `0.98` (large cards/CTAs) at pointer-down, 150ms ease-out, spring back.
-- [ ] **Focus-visible**: 3px soft accent ring (`--shadow-focus`) plus the hairline. Never remove focus without a replacement.
+- [ ] **Focus-visible**: 3px soft accent ring (`--shadow-focus`) plus the hairline. Never remove focus without a replacement. One ring per control, on the outer box of composite fields (§4.13).
 - [ ] **Disabled**: 50% opacity, `cursor: not-allowed`, no hover/press.
 - [ ] **Loading**: fixed width, inline spinner or label crossfade. Disable double-submit.
 - [ ] **Success/error feedback**: inline (checkmark draw-in via `pathLength 0→1` in 300ms, or red ring plus helper text). A toast for async results, with Undo for destructive actions [seen: "Task completed · Undo", "Couldn't save Company… Retry"].
@@ -630,11 +673,13 @@ Every interactive element must have these states. Go through them one by one.
 - [ ] **Tabs/segmented**: sliding indicator via `layoutId`.
 - [ ] **Inputs**: focus ring transition, character counter ("198/200"), inline validation after blur, not on every keystroke. OTP boxes auto-advance and paste-fill [seen: 6-digit verify screen].
 - [ ] **Numbers**: tabular figures. Animated count/roll on change, not on every render.
-- [ ] **Tooltips/keycaps**: show shortcuts (`/` in search, `ESC`, `C`) [seen].
+- [ ] **Tooltips/keycaps**: show shortcuts (`/` in search, `ESC`, `C`) [seen]. Every icon-only button has one. Open after ~500ms of hover; once one is open, neighbours open instantly for ~400ms (skip delay), so scanning a toolbar doesn't make you wait each time. Only the first one animates in (~120ms fade and 2px rise); instant ones just appear. No tooltip when focus returns to a trigger after its menu closes, none on touch, and they close on scroll and pointer-down [expert].
+- [ ] **Every control does something**: each button, menu item, chip and link either works or isn't there. Filters filter, search searches, "Share" copies a real link, "Export" downloads a real file, nav items change the view. A toast that claims an action happened when nothing changed is a dead button [X: "looks finished, doesn't work"]. Use a real menu primitive (Radix, bits-ui, Base UI, Ariakit) for menus, popovers and tooltips, not hand-rolled `div`s.
 - [ ] **Lists**: new rows fade/slide in, removed rows collapse height plus fade, reorder animates with `layout`.
 - [ ] **Hover cards in tables**: row hover `bg-[#FAFAFA]`, row actions (`…`) appear on hover with an opacity fade.
 - [ ] **Carousel dots**: active dot stretches into a pill (`width` via `layout`) [seen on signup preview].
-- [ ] **Copy buttons**: icon morphs copy → check for 1.5s.
+- [ ] **Copy buttons**: icon cross-fades copy → check (scale .5→1, blur 2px→0, ~200ms) for ~1.6s. If it has a tooltip, the tooltip stays open and its text changes to "Copied" instead of closing on click. Await the clipboard write: on failure show a cross and "Copy failed", never a false check. Announce the result in a `role="status"` region. A labelled variant reserves the width of its longest label so it doesn't resize [expert].
+- [ ] **Undo over confirm**: deletes, archives and bulk edits apply at once and show a toast with Undo for ~5s; reserve confirm dialogs for things undo can't reverse. Errors don't auto-dismiss [X: toast grouping, errors must not collapse].
 - [ ] **Touch targets**: ≥ 44×44pt on mobile (Apple HIG). Hit area may exceed the visual size.
 - [ ] **Haptics-feel on web**: tiny overshoot (bounce 0.2) only on toggles/likes and success.
 
@@ -682,6 +727,10 @@ Marcel has a post titled "unslopping an ai dashboard" (xpages p004). In October 
 16. **No buzzword copy** ("Build faster with AI", "Supercharge your workflow") and no em-dash-heavy marketing voice [X]. *Do:* write concrete, plain, product-specific copy.
 17. **No bento grid unless the content is truly heterogeneous** [X]. *Do:* let the content decide the layout.
 18. **No glassmorphism by default** [seen in the old list; sentiment groups it with "glow"]. *Do:* use solid surfaces, and blur only for overlays over imagery.
+19. **No twin CTAs and no filler cards** ("Get started" + "Learn more" side by side, a fourth stat card to fill the row, an icon in a rounded square on every card) [X]. *Do:* one primary action per view; as many cards as there are real numbers.
+20. **No "Welcome back, Alex! 👋" and no exclamation-mark copy** [X]. *Do:* lead with the user's work ("3 deals close this week").
+21. **No `"No data"` empty states** [X]. *Do:* say what will appear here and give the action that makes it appear; test with zero items, one item and very long names.
+22. **No dead UI** [X]. *Do:* see §6, "Every control does something". Click through every control before you hand it over.
 
 The old list still applies: white text on saturated pills, 600ms+ transitions, scale-from-0 popovers, bouncy springs everywhere, and 1px `#D1D5DB` borders on every box.
 
@@ -695,6 +744,14 @@ The old list still applies: white text on saturated pills, 600ms+ transitions, s
 - https://x.com/erramix01/status/2113937292863602955 (radial orbs, dot grids, bento, neon, drop shadows on everything)
 - https://x.com/lokidotdev/status/2117188486034063507 (everything hover-scales, 6 font weights)
 - https://x.com/_def/status/2115188253863071921 (untuned type, emoji status pills; tabular nums, 4px grid, one accent)
+- https://x.com/Zephyr_hg/status/2117371426600784071 (a checkable banned list beats "make it clean"; twin CTAs, fake "10K+" proof)
+- https://x.com/preetsuthar17/status/2117540786791493802 (twin CTAs, second primary button, "no data" empty states)
+- https://x.com/sinanyorulmazz/status/2116531845839851723 (design checker flags a removed focus ring as an error, "Welcome back 👋" copy)
+- https://x.com/equalworld_ai/status/2117349679700623510 (a stray `outline: none` is one of the most common quiet regressions)
+- https://x.com/Mr_Buzzoni/status/2106320604634702070 (dead buttons, errors next to the field, keyboard-only pass, real loading/empty/error screens)
+- https://x.com/keviduk/status/2109645687176495258 (group background-job toasts; errors must not collapse)
+
+Not found in X posts (Aug–Nov 2026) and tagged [expert] here instead: tooltip delays, double focus rings on composite fields, sidebar collapse/resize.
 
 ---
 
@@ -724,6 +781,9 @@ The old list still applies: white text on saturated pills, 600ms+ transitions, s
 **UX**
 - [ ] One primary action per view. Clear hierarchy in a 3-second squint test.
 - [ ] Keyboard: tab order, Enter/Escape, shortcuts shown as keycaps where useful.
+- [ ] Focus pass: Tab through every control and screenshot it. One ring each, on the outer box of composite fields, not clipped (§4.13).
+- [ ] Function pass: click every button, menu item, chip, link and row action. Each one does what its label says (§6).
+- [ ] Alignment pass: in sidebars and lists, icons share one column and labels share another; trigger rows match the rows below in width, height and inset.
 - [ ] Touch targets ≥ 44px on mobile. Sticky CTA doesn't cover content.
 - [ ] Error messages say what happened and how to fix it ("Couldn't save Company. Check your connection. Retry").
 - [ ] Review it again the next day with fresh eyes (Emil's advice), or at least do a second full pass.
@@ -771,7 +831,7 @@ asyncio.run(main())
 - [ ] **Type hierarchy:** one clear title. At most 2 weights. Display tracking is negative. Muted grey is used for secondary text, not for the primary text.
 - [ ] **Contrast:** body text ≥ 4.5:1, and nothing important in `#A3A3A3` on white. The focus ring is visible in `shot-focus.png`.
 - [ ] **Overflow/clipping:** nothing cut off or scrolling sideways at 390px. No wrapped buttons or labels. Long text truncates with an ellipsis.
-- [ ] **Sidebar** (if present): passes §4.12 "Common mistakes" 1–10. It is **inset** by default: the sidebar sits on the tinted app background with no fill of its own. The content is a white panel with an even ~8px gap to the top, right and bottom viewport edges, a 12–16px radius on all 4 corners, and a subtle ring/shadow. The panel, not the page, scrolls. It has a quiet active pill, a footer pinned to the bottom, and becomes a drawer or tab bar on mobile.
+- [ ] **Sidebar** (if present): passes §4.12 "Common mistakes" 1–10. It is cleanly **inset** (sidebar on the tinted app background with no fill of its own; content a panel with an even ~8px gap to the top, right and bottom edges, 12–16px radius on all 4 corners, a subtle ring/shadow, and its own scroll) or cleanly **flush** (sidebar on its own surface, one hairline, content edge to edge), never a mix. It has a quiet active pill, a footer pinned to the bottom, and becomes a drawer or tab bar on mobile.
 - [ ] **Slop rules:** none of the §8 tells are present (do a quick squint for a purple gradient, emoji, three centered cards, glow orbs, or fake testimonials).
 - [ ] **Motion present:** `shot-hover.png` differs from the rest state. `shot-midanim.png` shows elements partly in (opacity or translate between states). The code includes press scale, sliding indicators, and a `prefers-reduced-motion` branch.
 - [ ] **Mobile:** touch targets are ≥ 44px, the primary CTA is reachable, and nothing overlaps the sticky bars.
