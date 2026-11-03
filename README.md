@@ -26,7 +26,7 @@ skills/giga-ui/
 
 ## Showcase app
 
-This repo also holds a SvelteKit showcase: every screen here is built with the skill, and `/` is its landing page. `/evals` compares what a model produces for the same prompt with and without the skill — see `AGENTS.md` for how those outputs are generated.
+This repo also holds a SvelteKit showcase: every screen here is built with the skill, and `/` is its landing page. See `AGENTS.md` for how the eval outputs (with and without the skill) are generated.
 
 ---
 
