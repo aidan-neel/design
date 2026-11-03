@@ -1,5 +1,15 @@
 <script lang="ts">
 	import '@fontsource-variable/inter';
+	import IconButton from '#lib/kit/IconButton.svelte';
+	import KitRoot from '#lib/kit/KitRoot.svelte';
+	import MenuContent from '#lib/kit/MenuContent.svelte';
+	import MenuItem from '#lib/kit/MenuItem.svelte';
+	import MenuRadioItem from '#lib/kit/MenuRadioItem.svelte';
+	import Sidebar from '#lib/kit/Sidebar.svelte';
+	import Tip from '#lib/kit/Tip.svelte';
+	import { DropdownMenu } from 'bits-ui';
+	import { cubicOut } from 'svelte/easing';
+	import { fade, fly } from 'svelte/transition';
 
 	const ICONS = {
 		grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -218,6 +228,22 @@
 		}
 	];
 
+	const WORKSPACES = [
+		{ value: 'acme', label: 'Acme Labs' },
+		{ value: 'globex', label: 'Globex Retail' }
+	];
+	/** Share of all traffic each filter keeps; the demo scales its counts by these. */
+	const SEGMENTS = [
+		{ value: 'all', label: 'All users', scale: 1 },
+		{ value: 'new', label: 'New users', scale: 0.41 },
+		{ value: 'returning', label: 'Returning', scale: 0.59 }
+	];
+	const PLATFORMS = [
+		{ value: 'all', label: 'Web + iOS', scale: 1 },
+		{ value: 'web', label: 'Web', scale: 0.68 },
+		{ value: 'ios', label: 'iOS', scale: 0.32 }
+	];
+
 	const SOURCES = [
 		{ name: 'Organic search', share: 0.42, color: '#a5d8ff' },
 		{ name: 'Direct', share: 0.27, color: '#79bfe8' },
@@ -307,19 +333,89 @@
 	let activeSource = $state<number | null>(null);
 	let searchEl = $state<HTMLInputElement | null>(null);
 	let menuOpen = $state(false);
-	let toast = $state<string | null>(null);
+	let railed = $state(false);
+	let query = $state('');
+	let workspace = $state('acme');
+	let segment = $state('all');
+	let platform = $state('all');
+	let refreshing = $state(false);
+	let toast = $state<{ id: number; text: string; undo?: () => void } | null>(null);
 	let toastTimer: ReturnType<typeof setTimeout> | undefined;
+	let toastSeq = 0;
+
+	let notifications = $state([
+		{ id: 1, text: 'Checkout conversion dropped 0.4pp', time: '8m', unread: true },
+		{ id: 2, text: 'Stripe source finished syncing', time: '1h', unread: true },
+		{ id: 3, text: 'Weekly growth report is ready', time: '1d', unread: false }
+	]);
+	const unreadCount = $derived(notifications.filter((n) => n.unread).length);
 
 	const meta = $derived(RANGE_META[range]);
+	const workspaceLabel = $derived(WORKSPACES.find((w) => w.value === workspace)?.label ?? WORKSPACES[0].label);
+	const segmentOption = $derived(SEGMENTS.find((x) => x.value === segment) ?? SEGMENTS[0]);
+	const platformOption = $derived(PLATFORMS.find((x) => x.value === platform) ?? PLATFORMS[0]);
+	/** Range, segment and platform together scale every traffic count on the page. */
+	const factor = $derived(meta.factor * segmentOption.scale * platformOption.scale);
 
 	$effect(() => {
 		return () => clearTimeout(toastTimer);
 	});
 
-	function notify(message: string) {
-		toast = message;
+	function notify(text: string, undo?: () => void) {
 		clearTimeout(toastTimer);
-		toastTimer = setTimeout(() => (toast = null), 4000);
+		toast = { id: toastSeq++, text, undo };
+		toastTimer = setTimeout(() => (toast = null), undo ? 5000 : 3200);
+	}
+
+	function undoToast() {
+		toast?.undo?.();
+		clearTimeout(toastTimer);
+		toast = null;
+	}
+
+	function setRange(value: string) {
+		if ((RANGES as string[]).includes(value)) range = value as Range;
+	}
+
+	function refresh() {
+		refreshing = true;
+		setTimeout(() => {
+			refreshing = false;
+			notify('Data refreshed · 0.31s');
+		}, 700);
+	}
+
+	async function copyText(text: string, confirmation: string) {
+		try {
+			await navigator.clipboard.writeText(text);
+			notify(confirmation);
+		} catch (error) {
+			console.error('Clipboard write was refused', error);
+			notify('Couldn’t copy. Check clipboard permissions.');
+		}
+	}
+
+	function downloadCsv(filename: string, rows: (string | number)[][]) {
+		const url = URL.createObjectURL(new Blob([rows.map((r) => r.join(',')).join('\n')], { type: 'text/csv' }));
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = filename;
+		link.click();
+		URL.revokeObjectURL(url);
+		notify(`Exported ${filename}`);
+	}
+
+	function exportPages() {
+		downloadCsv(`top-pages-${range}.csv`, [
+			['page', 'views', 'visitors', 'conversion'],
+			...visiblePages.map((p) => [p.path, p.views, p.visitors, `${p.conv}%`])
+		]);
+	}
+
+	function markAllRead() {
+		const before = notifications.map((n) => n.unread);
+		for (const n of notifications) n.unread = false;
+		notify('Marked all as read', () => notifications.forEach((n, i) => (n.unread = before[i])));
 	}
 
 	function onKeydown(event: KeyboardEvent) {
@@ -330,6 +426,7 @@
 			searchEl?.focus();
 		}
 		if (event.key === 'Escape' && document.activeElement === searchEl) {
+			query = '';
 			searchEl?.blur();
 		}
 		if (event.key === 'Escape' && menuOpen) {
@@ -496,7 +593,7 @@
 		hover = Math.max(0, Math.min(values.length - 1, index));
 	}
 
-	const sessions = $derived(Math.round(128412 * meta.factor));
+	const sessions = $derived(Math.round(128412 * factor));
 
 	const sources = $derived(
 		SOURCES.map((s) => ({ ...s, value: Math.round(sessions * s.share) }))
@@ -518,9 +615,9 @@
 
 	const funnel = $derived(
 		FUNNEL.map((s, i) => {
-			const value = Math.round(s.value * meta.factor);
-			const top = Math.round(FUNNEL[0].value * meta.factor);
-			const prevValue = i === 0 ? value : Math.round(FUNNEL[i - 1].value * meta.factor);
+			const value = Math.round(s.value * factor);
+			const top = Math.round(FUNNEL[0].value * factor);
+			const prevValue = i === 0 ? value : Math.round(FUNNEL[i - 1].value * factor);
 			return {
 				...s,
 				value,
@@ -534,10 +631,11 @@
 	const pages = $derived(
 		PAGES.map((p) => ({
 			...p,
-			views: Math.round(p.views * meta.factor),
-			visitors: Math.round(p.visitors * meta.factor)
+			views: Math.round(p.views * factor),
+			visitors: Math.round(p.visitors * factor)
 		})).sort((a, b) => (a[sortKey] - b[sortKey]) * sortDir)
 	);
+	const visiblePages = $derived(pages.filter((p) => p.path.includes(query.trim().toLowerCase())));
 
 	function sortBy(key: SortKey) {
 		if (sortKey === key) {
@@ -1190,7 +1288,7 @@
 				<span class="dot-sep">·</span>
 				<span>Query 0.38s</span>
 				<span class="dot-sep">·</span>
-				<span>{int(128_402 * meta.factor)} events in range</span>
+				<span>{int(128_402 * factor)} events in range</span>
 				<span class="foot-right">All times in UTC</span>
 			</footer>
 		</main>
