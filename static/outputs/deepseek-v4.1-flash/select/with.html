@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Choose a model</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			:root {
+				/* Surfaces */
+				--bg: oklch(0.977 0.002 260);
+				--surface: oklch(1 0 0);
+				--surface-hover: oklch(0.966 0.003 260);
+				--surface-press: oklch(0.944 0.004 260);
+
+				/* Text */
+				--fg: oklch(0.235 0.012 265);
+				--fg-muted: oklch(0.53 0.013 265);
+				--fg-faint: oklch(0.64 0.011 265);
+
+				/* Lines */
+				--border: oklch(0.905 0.004 260);
+				--border-strong: oklch(0.83 0.006 260);
+
+				/* Accent */
+				--accent: oklch(0.52 0.17 262);
+				--accent-ring: oklch(0.52 0.17 262 / 0.22);
+
+				--shadow-menu:
+					0 16px 36px -12px oklch(0.24 0.03 265 / 0.22),
+					0 3px 10px -4px oklch(0.24 0.03 265 / 0.1);
+
+				/* Space (4px base) */
+				--sp-1: 4px;
+				--sp-2: 8px;
+				--sp-3: 12px;
+				--sp-4: 16px;
+
+				/* Radius */
+				--radius-sm: 7px;
+				--radius-md: 10px;
+				--radius-lg: 13px;
+
+				/* Motion */
+				--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+				--ease-in: cubic-bezier(0.4, 0, 1, 1);
+				--dur-in: 160ms;
+				--dur-out: 90ms;
+				--dur-color: 110ms;
+			}
+
+			@media (prefers-color-scheme: dark) {
+				:root {
+					--bg: oklch(0.193 0.006 265);
+					--surface: oklch(0.238 0.008 265);
+					--surface-hover: oklch(0.288 0.009 265);
+					--surface-press: oklch(0.318 0.01 265);
+
+					--fg: oklch(0.955 0.004 260);
+					--fg-muted: oklch(0.72 0.011 260);
+					--fg-faint: oklch(0.58 0.011 260);
+
+					--border: oklch(0.325 0.009 265);
+					--border-strong: oklch(0.43 0.011 265);
+
+					--accent: oklch(0.74 0.13 262);
+					--accent-ring: oklch(0.74 0.13 262 / 0.28);
+
+					--shadow-menu:
+						0 18px 44px -12px oklch(0 0 0 / 0.55),
+						0 3px 10px -4px oklch(0 0 0 / 0.4);
+				}
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html,
+			body {
+				min-height: 100%;
+			}
+
+			body {
+				margin: 0;
+				min-height: 100dvh;
+				display: grid;
+				place-items: center;
+				padding: var(--sp-4);
+				background: var(--bg);
+				color: var(--fg);
+				font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+				font-size: 14px;
+				line-height: 1.45;
+				-webkit-font-smoothing: antialiased;
+				text-rendering: optimizeLegibility;
+			}
+
+			.field {
+				width: min(340px, 100%);
+			}
+
+			.field-label {
+				display: block;
+				margin-bottom: 6px;
+				font-size: 13px;
+				font-weight: 500;
+				color: var(--fg-muted);
+			}
+
+			.select {
+				position: relative;
+			}
+
+			/* Trigger */
+			.trigger {
+				display: flex;
+				align-items: center;
+				gap: var(--sp-2);
+				width: 100%;
+				min-height: 44px;
+				padding: 0 var(--sp-3);
+				border: 1px solid var(--border);
+				border-radius: var(--radius-md);
+				background: var(--surface);
+				color: var(--fg);
+				font: inherit;
+				font-weight: 500;
+				text-align: left;
+				cursor: default;
+				outline: none;
+				transition:
+					border-color var(--dur-color) var(--ease-out),
+					background-color var(--dur-color) var(--ease-out),
+					box-shadow var(--dur-color) var(--ease-out);
+			}
+
+			@media (hover: hover) and (pointer: fine) {
+				.trigger:hover {
+					border-color: var(--border-strong);
+				}
+			}
+
+			.trigger:focus-visible,
+			.select[data-open='true'] .trigger {
+				border-color: var(--accent);
+				box-shadow: 0 0 0 3px var(--accent-ring);
+			}
+
+			.trigger-name {
+				flex: 1 1 auto;
+				min-width: 0;
+				overflow: hidden;
+				white-space: nowrap;
+				text-overflow: ellipsis;
+			}
+
+			.chevron {
+				flex: none;
+				color: var(--fg-faint);
+				transition: transform var(--dur-in) var(--ease-out);
+			}
+
+			.select[data-open='true'] .chevron {
+				transform: rotate(180deg);
+			}
+
+			/* Popover */
+			.listbox {
+				position: absolute;
+				z-index: 10;
+				top: calc(100% + 6px);
+				left: 0;
+				right: 0;
+				max-height: min(320px, 60dvh);
+				margin: 0;
+				padding: var(--sp-1);
+				list-style: none;
+				overflow-y: auto;
+				overscroll-behavior: contain;
+				border-radius: var(--radius-lg);
+				background: var(--surface);
+				box-shadow: var(--shadow-menu), inset 0 0 0 1px var(--border);
+				transform-origin: top center;
+
+				opacity: 0;
+				transform: translateY(-4px) scale(0.97);
+				visibility: hidden;
+				transition:
+					opacity var(--dur-out) var(--ease-in),
+					transform var(--dur-out) var(--ease-in),
+					visibility 0s linear var(--dur-out);
+			}
+
+			.select[data-open='true'] .listbox {
+				opacity: 1;
+				transform: none;
+				visibility: visible;
+				transition:
+					opacity var(--dur-in) var(--ease-out),
+					transform var(--dur-in) var(--ease-out),
+					visibility 0s;
+			}
+
+			/* Options */
+			.option {
+				display: flex;
+				align-items: center;
+				gap: var(--sp-3);
+				min-height: 48px;
+				padding: 7px 10px;
+				border-radius: var(--radius-sm);
+				cursor: default;
+				transition: background-color 70ms var(--ease-out);
+			}
+
+			.option.is-active {
+				background: var(--surface-hover);
+				transition: none;
+			}
+
+			.option-text {
+				flex: 1 1 auto;
+				min-width: 0;
+				display: flex;
+				flex-direction: column;
+				gap: 1px;
+			}
+
+			.option-name {
+				font-size: 14px;
+				font-weight: 500;
+				color: var(--fg);
+				overflow: hidden;
+				white-space: nowrap;
+				text-overflow: ellipsis;
+			}
+
+			.option-desc {
+				font-size: 12.5px;
+				color: var(--fg-muted);
+				overflow: hidden;
+				white-space: nowrap;
+				text-overflow: ellipsis;
+			}
+
+			.check {
+				flex: none;
+				color: var(--accent);
+				opacity: 0;
+				transform: scale(0.9);
+				transition:
+					opacity var(--dur-color) var(--ease-out),
+					transform var(--dur-color) var(--ease-out);
+			}
+
+			.option[aria-selected='true'] .check {
+				opacity: 1;
+				transform: none;
+			}
+
+			.option[aria-selected='true'] .option-name {
+				font-weight: 600;
+			}
+
+			.option[aria-disabled='true'] {
+				opacity: 0.42;
+			}
+
+			.option[aria-disabled='true'] .option-desc {
+				color: var(--fg-faint);
+			}
+
+			.hint {
+				margin: 10px 0 0;
+				font-size: 12.5px;
+				color: var(--fg-faint);
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				.listbox,
+				.select[data-open='true'] .listbox {
+					transform: none;
+					transition-duration: 1ms;
+				}
+
+				.chevron,
+				.check,
+				.trigger,
+				.option {
+					transition-duration: 1ms;
+				}
+			}
+		</style>
+	<style>/* component only: no labels or helper text */.label,.field-label,.hint,.status{display:none!important}</style>
+</head>
+	<body>
+		<div class="field">
+			<span class="field-label" id="model-label">Model</span>
+
+			<div class="select" id="select" data-open="false">
+				<button
+					type="button"
+					class="trigger"
+					id="trigger"
+					role="combobox"
+					aria-haspopup="listbox"
+					aria-expanded="false"
+					aria-controls="listbox"
+					aria-labelledby="model-label model-name"
+				>
+					<span class="trigger-name" id="model-name">DeepSeek V4.1 Flash</span>
+					<svg
+						class="chevron"
+						width="16"
+						height="16"
+						viewBox="0 0 16 16"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path d="m4 6 4 4 4-4" />
+					</svg>
+				</button>
+
+				<ul class="listbox" id="listbox" role="listbox" aria-labelledby="model-label"></ul>
+			</div>
+
+			<p class="hint">Switching models starts a new conversation.</p>
+		</div>
+
+		<script>
+			const models = [
+				{
+					id: 'deepseek-v4.1-flash',
+					name: 'DeepSeek V4.1 Flash',
+					desc: 'Fast everyday tasks, 128K context'
+				},
+				{ id: 'glm-5.3', name: 'GLM 5.3', desc: 'Flagship reasoning and code' },
+				{ id: 'gpt-6.1-sol', name: 'GPT 6.1 Sol', desc: 'Multimodal, 400K context' },
+				{
+					id: 'qwen-3.8-max',
+					name: 'Qwen 3.8 Max',
+					desc: 'Not available on your plan',
+					disabled: true
+				},
+				{ id: 'muse-spark-1.3', name: 'Muse Spark 1.3', desc: 'Creative writing and ideation' },
+				{ id: 'glm-5.3-flash', name: 'GLM 5.3 Flash', desc: 'Balanced speed and quality' },
+				{ id: 'mimo-v2.6-flash', name: 'Mimo V2.6 Flash', desc: 'Lightweight and quick' }
+			];
+
+			const select = document.getElementById('select');
+			const trigger = document.getElementById('trigger');
+			const listbox = document.getElementById('listbox');
+			const nameEl = document.getElementById('model-name');
+
+			let selectedId = 'deepseek-v4.1-flash';
+			let open = false;
+			let activeIndex = -1;
+			let typeBuffer = '';
+			let typeTimer;
+
+			const CHECK = `<svg class="check" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>`;
+
+			function render() {
+				listbox.innerHTML = models
+					.map((model, i) => {
+						const selected = model.id === selectedId;
+						const disabled = model.disabled ? ' aria-disabled="true"' : '';
+						return `<li class="option" id="option-${i}" role="option" aria-selected="${selected}"${disabled}>
+							<span class="option-text">
+								<span class="option-name">${model.name}</span>
+								<span class="option-desc">${model.desc}</span>
+							</span>
+							${CHECK}
+						</li>`;
+					})
+					.join('');
+			}
+
+			function firstEnabled(from = 0, dir = 1) {
+				for (let n = 0; n < models.length; n++) {
+					const i = (((from + dir * n) % models.length) + models.length) % models.length;
+					if (!models[i].disabled) return i;
+				}
+				return -1;
+			}
+
+			function setActive(index, { wrap = false } = {}) {
+				if (index < 0) return;
+				if (!wrap) index = Math.max(0, Math.min(models.length - 1, index));
+				index = ((index % models.length) + models.length) % models.length;
+
+				let guard = 0;
+				while (models[index].disabled && guard++ < models.length) {
+					index = (index + 1) % models.length;
+				}
+				if (models[index].disabled) return;
+
+				activeIndex = index;
+				const options = listbox.querySelectorAll('.option');
+				options.forEach((option, i) => option.classList.toggle('is-active', i === index));
+				trigger.setAttribute('aria-activedescendant', `option-${index}`);
+				options[index].scrollIntoView({ block: 'nearest' });
+			}
+
+			function openMenu() {
+				if (open) return;
+				open = true;
+				render();
+				select.dataset.open = 'true';
+				trigger.setAttribute('aria-expanded', 'true');
+				const selected = models.findIndex((m) => m.id === selectedId);
+				setActive(selected >= 0 && !models[selected].disabled ? selected : firstEnabled());
+			}
+
+			function closeMenu({ restoreFocus = false } = {}) {
+				if (!open) return;
+				open = false;
+				select.dataset.open = 'false';
+				trigger.setAttribute('aria-expanded', 'false');
+				trigger.removeAttribute('aria-activedescendant');
+				activeIndex = -1;
+				if (restoreFocus) trigger.focus();
+			}
+
+			function choose(model) {
+				if (!model || model.disabled) return;
+				selectedId = model.id;
+				nameEl.textContent = model.name;
+				render();
+				closeMenu({ restoreFocus: true });
+			}
+
+			trigger.addEventListener('click', () => (open ? closeMenu() : openMenu()));
+
+			trigger.addEventListener('keydown', (event) => {
+				const { key } = event;
+
+				if (key === 'ArrowDown' || key === 'ArrowUp') {
+					event.preventDefault();
+					if (!open) {
+						openMenu();
+						return;
+					}
+					setActive(activeIndex + (key === 'ArrowDown' ? 1 : -1), { wrap: true });
+					return;
+				}
+
+				if (key === 'Enter' || key === ' ' || key === 'Spacebar') {
+					event.preventDefault();
+					if (!open) openMenu();
+					else if (activeIndex >= 0) choose(models[activeIndex]);
+					return;
+				}
+
+				if (key === 'Escape') {
+					if (open) {
+						event.preventDefault();
+						closeMenu();
+					}
+					return;
+				}
+
+				if (key === 'Home' || key === 'End') {
+					if (!open) return;
+					event.preventDefault();
+					setActive(key === 'Home' ? firstEnabled() : firstEnabled(models.length - 1, -1));
+					return;
+				}
+
+				if (key === 'Tab') {
+					closeMenu();
+					return;
+				}
+
+				if (key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
+					typeBuffer += key.toLowerCase();
+					clearTimeout(typeTimer);
+					typeTimer = setTimeout(() => (typeBuffer = ''), 500);
+					if (!open) openMenu();
+					const match = models.findIndex(
+						(model) => !model.disabled && model.name.toLowerCase().startsWith(typeBuffer)
+					);
+					if (match >= 0) setActive(match);
+				}
+			});
+
+			listbox.addEventListener('mousemove', (event) => {
+				const option = event.target.closest('.option');
+				if (!option || option.getAttribute('aria-disabled') === 'true') return;
+				const index = Number(option.id.replace('option-', ''));
+				if (index !== activeIndex) setActive(index);
+			});
+
+			listbox.addEventListener('click', (event) => {
+				const option = event.target.closest('.option');
+				if (!option || option.getAttribute('aria-disabled') === 'true') return;
+				choose(models[Number(option.id.replace('option-', ''))]);
+			});
+
+			document.addEventListener('pointerdown', (event) => {
+				if (open && !select.contains(event.target)) closeMenu();
+			});
+
+			window.addEventListener('blur', () => closeMenu());
+		</script>
+	</body>
+</html>

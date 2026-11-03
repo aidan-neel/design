@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Copy button</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+	/* tokens */
+	:root {
+		--font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+		--bg: #f4f4f5;
+		--fg: #18181b;
+		--ring: #2563eb;
+
+		--btn-bg: #18181b;
+		--btn-bg-hover: #34343d;
+		--btn-fg: #fafafa;
+
+		--ok-bg: #e3f4e9;
+		--ok-bg-hover: #d6eedf;
+		--ok-line: #abd9c2;
+		--ok-fg: #176143;
+
+		--danger-bg: #fceae7;
+		--danger-bg-hover: #f9e0dc;
+		--danger-line: #f0bfb7;
+		--danger-fg: #a8271c;
+
+		--radius-btn: 10px;
+
+		--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+		--dur-hover: 120ms;
+		--dur-swap: 170ms;
+	}
+
+	* {
+		box-sizing: border-box;
+		margin: 0;
+	}
+
+	html,
+	body {
+		height: 100%;
+	}
+
+	body {
+		min-height: 100dvh;
+		display: grid;
+		place-items: center;
+		padding: 24px 16px;
+		font-family: var(--font-sans);
+		background: var(--bg);
+		color: var(--fg);
+		-webkit-font-smoothing: antialiased;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	/* one width across Copy, Copied and Copy failed, so nothing shifts */
+	.copy {
+		display: inline-grid;
+		align-items: center;
+		justify-items: center;
+		height: 38px;
+		padding: 0 18px;
+		border: 0;
+		border-radius: var(--radius-btn);
+		background: var(--btn-bg);
+		color: var(--btn-fg);
+		font-family: inherit;
+		font-size: 14px;
+		font-weight: 500;
+		letter-spacing: -0.005em;
+		transition:
+			background-color var(--dur-hover) ease-out,
+			color var(--dur-hover) ease-out,
+			box-shadow var(--dur-hover) ease-out;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+	.copy:focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: 2px;
+	}
+
+	.content {
+		grid-area: 1 / 1;
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		white-space: nowrap;
+		visibility: hidden;
+		opacity: 0;
+		transform: translateY(2px);
+	}
+	.copy[data-state='idle'] .content[data-when='idle'],
+	.copy[data-state='done'] .content[data-when='done'],
+	.copy[data-state='error'] .content[data-when='error'] {
+		visibility: visible;
+		opacity: 1;
+		transform: none;
+		transition:
+			opacity var(--dur-swap) var(--ease-out),
+			transform var(--dur-swap) var(--ease-out);
+	}
+	.content svg {
+		display: block;
+		flex: none;
+	}
+
+	.copy[data-state='done'] {
+		background: var(--ok-bg);
+		color: var(--ok-fg);
+		box-shadow: inset 0 0 0 1px var(--ok-line);
+	}
+	.copy[data-state='error'] {
+		background: var(--danger-bg);
+		color: var(--danger-fg);
+		box-shadow: inset 0 0 0 1px var(--danger-line);
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.copy[data-state='idle']:hover {
+			background: var(--btn-bg-hover);
+		}
+		.copy[data-state='done']:hover {
+			background: var(--ok-bg-hover);
+		}
+		.copy[data-state='error']:hover {
+			background: var(--danger-bg-hover);
+		}
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		clip-path: inset(50%);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	/* touch targets */
+	@media (pointer: coarse) {
+		.copy {
+			height: 46px;
+			padding: 0 22px;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.content {
+			transform: none;
+		}
+		.copy {
+			transition-duration: 0ms;
+		}
+	}
+</style>
+</head>
+<body>
+	<main>
+		<button id="copy" class="copy" type="button" data-state="idle">
+			<span class="content" data-when="idle">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+				Copy
+			</span>
+			<span class="content" data-when="done">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+				Copied
+			</span>
+			<span class="content" data-when="error">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+				Copy failed
+			</span>
+		</button>
+		<p id="live" class="sr-only" role="status" aria-live="polite"></p>
+	</main>
+
+	<script>
+		(() => {
+			'use strict';
+
+			const COMMAND = 'npm i @datum/sdk';
+			const HOLD_MS = 1800;
+			const ERROR_HOLD_MS = 2600;
+
+			const button = document.getElementById('copy');
+			const live = document.getElementById('live');
+
+			let holdTimer = 0;
+
+			const setState = (state) => {
+				button.dataset.state = state;
+			};
+
+			const announce = (message) => {
+				live.textContent = message;
+			};
+
+			function writeViaClipboardApi() {
+				if (!navigator.clipboard || !navigator.clipboard.writeText) {
+					return Promise.resolve(false);
+				}
+				return navigator.clipboard.writeText(COMMAND).then(
+					() => true,
+					() => false
+				);
+			}
+
+			function writeViaExecCommand() {
+				const helper = document.createElement('textarea');
+				helper.value = COMMAND;
+				helper.setAttribute('readonly', '');
+				helper.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0';
+				document.body.appendChild(helper);
+				helper.select();
+				helper.setSelectionRange(0, COMMAND.length);
+				let written = false;
+				try {
+					written = document.execCommand('copy');
+				} catch (err) {
+					written = false;
+				}
+				helper.remove();
+				return written;
+			}
+
+			button.addEventListener('click', () => {
+				window.clearTimeout(holdTimer);
+
+				writeViaClipboardApi().then((written) => {
+					if (!written) {
+						written = writeViaExecCommand();
+					}
+
+					if (written) {
+						setState('done');
+						announce('Copied to clipboard.');
+						holdTimer = window.setTimeout(() => {
+							setState('idle');
+							announce('');
+						}, HOLD_MS);
+					} else {
+						setState('error');
+						announce('Copy failed. Click Copy to try again.');
+						holdTimer = window.setTimeout(() => {
+							setState('idle');
+							announce('');
+						}, ERROR_HOLD_MS);
+					}
+				});
+			});
+		})();
+	</script>
+</body>
+</html>
