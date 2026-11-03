@@ -144,7 +144,7 @@
 			</div>
 			<p class="mt-2.5 text-[15px] text-[#555]">Artificial taste for artificial intelligence</p>
 			<p class="mt-1 text-[13px] text-[#a3a3a3]">
-				An installable design skill for coding agents. Every demo below is built with it.
+				An installable design skill for coding agents. Every demo below was one shot with GLM 5.3 Flash.
 			</p>
 		</header>
 
@@ -170,6 +170,10 @@
 					</a>
 				</dd>
 			</div>
+			<div class="flex h-13 items-center justify-between gap-3 border-t border-line">
+				<dt class="font-mono text-[12px] text-[#8a8a8a]">Model</dt>
+				<dd class="m-0 text-[13px] text-[#737373]">One shot with GLM 5.3 Flash</dd>
+			</div>
 			<div class="flex h-13 items-center justify-between gap-3 border-y border-line">
 				<dt class="font-mono text-[12px] text-[#8a8a8a]">Demos</dt>
 				<dd class="m-0">
@@ -183,10 +187,10 @@
 
 	<!-- ================= demos: extra width, out of the column ================= -->
 	<section id="demos" class="scroll-mt-16">
-		<div class="mx-auto max-w-[1600px] px-6 pt-16 pb-4">
+		<div class="mx-auto max-w-[1160px] px-6 pt-16 pb-4">
 			<div class="reveal mb-8 flex items-baseline justify-between gap-4" use:reveal>
 				<h2 class="m-0 text-[13px] font-medium text-[#444]">Built with the skill</h2>
-				<p class="m-0 font-mono text-[11px] text-[#a3a3a3]">six screens · one visual language</p>
+				<p class="m-0 font-mono text-[11px] text-[#a3a3a3]">one shot with GLM 5.3 Flash</p>
 			</div>
 
 			<div class="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
@@ -196,8 +200,8 @@
 						class="reveal group block rounded-xl"
 						use:reveal={Math.min(i * 70, 350)}
 					>
-						<!-- the screenshot itself, cropped and fading at the foot -->
-						<span class="block h-[240px] overflow-hidden rounded-xl bg-[#f4f4f4] shadow-[0_0_0_1px_rgb(0_0_0/.06)] transition-shadow duration-200 group-hover:shadow-[0_0_0_1px_rgb(0_0_0/.1),0_8px_24px_-8px_rgb(0_0_0/.14)]">
+						<!-- the screenshot itself, boxed at its own 16:10 shape -->
+						<span class="block aspect-[16/10] overflow-hidden rounded-xl bg-[#f4f4f4] shadow-[0_0_0_1px_rgb(0_0_0/.06)] transition-shadow duration-200 group-hover:shadow-[0_0_0_1px_rgb(0_0_0/.1),0_8px_24px_-8px_rgb(0_0_0/.14)]">
 							<img src={d.shot} alt="{d.name} demo built with giga-ui" class="block w-full transition-transform duration-500 ease-[cubic-bezier(.23,1,.32,1)] group-hover:scale-[1.015]" loading="lazy" />
 						</span>
 						<span class="mt-4 flex items-baseline justify-between gap-3">
