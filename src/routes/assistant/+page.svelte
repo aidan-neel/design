@@ -1,9 +1,17 @@
 <script lang="ts">
 	import '@fontsource-variable/inter';
+	import CopyButton from '#lib/kit/CopyButton.svelte';
+	import FieldError from '#lib/kit/FieldError.svelte';
+	import IconButton from '#lib/kit/IconButton.svelte';
+	import KitRoot from '#lib/kit/KitRoot.svelte';
+	import MenuContent from '#lib/kit/MenuContent.svelte';
+	import MenuItem from '#lib/kit/MenuItem.svelte';
+	import Sidebar from '#lib/kit/Sidebar.svelte';
+	import Tip from '#lib/kit/Tip.svelte';
 	import { DropdownMenu } from 'bits-ui';
 	import { onDestroy, tick } from 'svelte';
 	import { quintOut } from 'svelte/easing';
-	import { fly } from 'svelte/transition';
+	import { fade, fly } from 'svelte/transition';
 	import Icon from './Icon.svelte';
 	import {
 		createConversations,
@@ -18,7 +26,11 @@
 
 	const THINKING_DELAY_MS = 900;
 	const STREAM_WORD_INTERVAL_MS = 35;
-	const COPIED_FEEDBACK_MS = 1500;
+	const TOAST_MS = 4000;
+	const MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+	type Attachment = { id: number; name: string; size: number };
+	type Toast = { id: number; text: string; undo?: () => void };
 
 	let conversations = $state(createConversations());
 	let activeId = $state<string | null>('churn');
@@ -26,7 +38,14 @@
 	let query = $state('');
 	let modelValue = $state<string>(models[0].value);
 	let webSearch = $state(true);
-	let copiedKey = $state<string | null>(null);
+	let sidebarCollapsed = $state(false);
+	let feedback = $state<Record<number, 'up' | 'down'>>({});
+	let attachments = $state<Attachment[]>([]);
+	let attachError = $state<string | null>(null);
+	let toast = $state<Toast | null>(null);
+	let answerEls = $state<Record<number, HTMLElement>>({});
+	let draftBodyEl: HTMLElement | undefined = $state();
+	let fileInput: HTMLInputElement | undefined = $state();
 	let historyPill = $state<{ y: number; height: number } | null>(null);
 
 	let navEl: HTMLElement | undefined = $state();
@@ -36,7 +55,8 @@
 
 	let thinkingTimer: ReturnType<typeof setTimeout> | undefined;
 	let streamTimer: ReturnType<typeof setInterval> | undefined;
-	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+	let toastTimer: ReturnType<typeof setTimeout> | undefined;
+	let nextLocalId = 1;
 
 	const active = $derived(conversations.find((conversation) => conversation.id === activeId));
 	const isResponding = $derived(active?.messages.some((message) => message.status !== 'done') ?? false);
@@ -60,7 +80,7 @@
 	onDestroy(() => {
 		clearTimeout(thinkingTimer);
 		clearInterval(streamTimer);
-		clearTimeout(copiedTimer);
+		clearTimeout(toastTimer);
 	});
 
 	function groupHistory(all: Conversation[], search: string) {
@@ -73,7 +93,7 @@
 	}
 
 	function measureHistoryPill() {
-		const current = navEl?.querySelector<HTMLElement>('[aria-current="page"]');
+		const current = navEl?.querySelector<HTMLElement>('[aria-current="page"]')?.closest<HTMLElement>('.history-row');
 		historyPill = current ? { y: current.offsetTop, height: current.offsetHeight } : null;
 	}
 
@@ -88,9 +108,12 @@
 		if (prompt.length === 0 || isResponding) return;
 
 		const conversation = active ?? openConversation(prompt);
-		conversation.messages.push(createMessage('user', prompt, 'done'));
+		const files = attachments.length ? ` · ${attachments.map((a) => a.name).join(', ')}` : '';
+		conversation.messages.push(createMessage('user', prompt + files, 'done'));
 		conversation.messages.push(createMessage('assistant', '', 'thinking'));
 		draft = '';
+		attachments = [];
+		attachError = null;
 
 		const reply = conversation.messages[conversation.messages.length - 1];
 		streamReply(reply);
@@ -124,32 +147,90 @@
 		reply.status = 'done';
 	}
 
+	function regenerate(message: Message) {
+		if (isResponding) return;
+		message.rich = undefined;
+		message.text = '';
+		message.status = 'thinking';
+		delete feedback[message.id];
+		streamReply(message);
+	}
+
+	function rate(message: Message, value: 'up' | 'down') {
+		if (feedback[message.id] === value) delete feedback[message.id];
+		else feedback[message.id] = value;
+	}
+
+	function deleteConversation(id: string) {
+		const index = conversations.findIndex((c) => c.id === id);
+		if (index === -1) return;
+		const [removed] = conversations.splice(index, 1);
+		const wasActive = activeId === id;
+		if (wasActive) activeId = conversations[Math.min(index, conversations.length - 1)]?.id ?? null;
+		showToast(`Deleted “${removed.title}”`, () => {
+			conversations.splice(index, 0, removed);
+			if (wasActive) activeId = removed.id;
+		});
+	}
+
+	async function copyLink(id: string | null) {
+		try {
+			await navigator.clipboard.writeText(`${location.origin}/assistant?chat=${id ?? ''}`);
+			showToast('Link copied');
+		} catch (error) {
+			console.error('Clipboard write was refused', error);
+			showToast('Couldn’t copy the link. Check clipboard permissions.');
+		}
+	}
+
+	function exportMarkdown() {
+		if (!active) return;
+		const body = active.messages
+			.map((m) => `**${m.role === 'user' ? 'You' : 'Halo'}:** ${answerEls[m.id]?.innerText ?? m.text}`)
+			.join('\n\n');
+		const url = URL.createObjectURL(new Blob([`# ${active.title}\n\n${body}\n`], { type: 'text/markdown' }));
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `${active.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.md`;
+		link.click();
+		URL.revokeObjectURL(url);
+		showToast('Exported as Markdown');
+	}
+
+	function addFiles(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const files = [...(input.files ?? [])];
+		input.value = '';
+		const tooBig = files.find((f) => f.size > MAX_FILE_BYTES);
+		if (tooBig) {
+			attachError = `${tooBig.name} is over 20 MB. Try a smaller export.`;
+			return;
+		}
+		attachError = null;
+		attachments = [...attachments, ...files.map((f) => ({ id: nextLocalId++, name: f.name, size: f.size }))];
+		composerEl?.focus();
+	}
+
+	function removeAttachment(id: number) {
+		attachments = attachments.filter((a) => a.id !== id);
+		attachError = null;
+	}
+
+	function showToast(text: string, undo?: () => void) {
+		clearTimeout(toastTimer);
+		toast = { id: nextLocalId++, text, undo };
+		toastTimer = setTimeout(() => (toast = null), undo ? 5000 : TOAST_MS);
+	}
+
+	function undoToast() {
+		toast?.undo?.();
+		clearTimeout(toastTimer);
+		toast = null;
+	}
+
 	function stopResponding() {
 		const pending = active?.messages.find((message) => message.status !== 'done');
 		if (pending) finishReply(pending);
-	}
-
-	async function copyText(key: string, text: string) {
-		try {
-			await navigator.clipboard.writeText(text);
-		} catch (error) {
-			console.error(`Couldn't copy ${key} to the clipboard`, error);
-			return;
-		}
-
-		copiedKey = key;
-		clearTimeout(copiedTimer);
-		copiedTimer = setTimeout(() => (copiedKey = null), COPIED_FEEDBACK_MS);
-	}
-
-	function copyAnswer(button: HTMLElement, message: Message) {
-		const answer = button.closest('.answer-col')?.querySelector<HTMLElement>('.answer');
-		copyText(`message-${message.id}`, answer?.innerText ?? message.text);
-	}
-
-	function copyDraft(button: HTMLElement) {
-		const body = button.closest('.draft')?.querySelector<HTMLElement>('.draft-body');
-		copyText('draft', body?.innerText ?? '');
 	}
 
 	function handleComposerKeydown(event: KeyboardEvent) {
@@ -173,196 +254,282 @@
 
 <svelte:window onkeydown={handleWindowKeydown} />
 
-<div class="app">
-	<aside class="sidebar">
-		<div class="brand">
-			<span class="logo" aria-hidden="true">{@render sparkle(12)}</span>
-			<span class="brand-name">Halo</span>
-			<button class="icon-btn" type="button" aria-label="Collapse sidebar">
-				<Icon name="sidebar" />
-			</button>
-		</div>
-
-		<button class="btn btn-primary btn-block" type="button" onclick={startNewChat}>
-			<Icon name="plus" size={14} />
-			New chat
-		</button>
-
-		<label class="search">
-			<Icon name="search" size={14} />
-			<input bind:this={searchEl} bind:value={query} type="search" placeholder="Search chats" aria-label="Search chats" />
-			<kbd>/</kbd>
-		</label>
-
-		<nav class="history" bind:this={navEl} aria-label="Chat history">
-			{#if historyPill}
-				<span class="history-pill" style:transform="translateY({historyPill.y}px)" style:height="{historyPill.height}px"></span>
-			{/if}
-
-			{#each visibleGroups as group (group.name)}
-				<p class="group-label">{group.name}</p>
-				{#each group.items as conversation (conversation.id)}
-					<button
-						class="history-item"
-						type="button"
-						aria-current={conversation.id === activeId ? 'page' : undefined}
-						title={conversation.title}
-						onclick={() => (activeId = conversation.id)}
-					>
-						{conversation.title}
-					</button>
-				{/each}
-			{:else}
-				<p class="history-empty">No chats match “{query}”</p>
-			{/each}
-		</nav>
-
-		<div class="usage">
-			<div class="usage-row">
-				<span>Messages this month</span>
-				<span class="tabular">412 / 1,000</span>
-			</div>
-			<div class="meter"><span style:width="41.2%"></span></div>
-		</div>
-
-		<div class="account">
-			<span class="avatar">MR</span>
-			<span class="account-text">
-				<span class="account-name">Maya Reyes</span>
-				<span class="account-plan">Pro · Northwind</span>
-			</span>
-			<button class="icon-btn" type="button" aria-label="Settings">
-				<Icon name="sliders" />
-			</button>
-		</div>
-	</aside>
-
-	<main class="main">
-		<header class="topbar">
-			<h1 class="chat-title">{active?.title ?? 'New chat'}</h1>
-
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger class="model-trigger">
-					{modelLabel}
-					<Icon name="chevronDown" size={14} />
-				</DropdownMenu.Trigger>
-				<DropdownMenu.Portal>
-					<DropdownMenu.Content class="model-menu" sideOffset={6} align="start">
-						<DropdownMenu.RadioGroup bind:value={modelValue}>
-							{#each models as model (model.value)}
-								<DropdownMenu.RadioItem value={model.value} class="model-item">
-									{#snippet children({ checked })}
-										<span class="model-item-text">
-											<span class="model-item-label">{model.label}</span>
-											<span class="model-item-hint">{model.hint}</span>
-										</span>
-										{#if checked}
-											<Icon name="check" size={14} />
-										{/if}
-									{/snippet}
-								</DropdownMenu.RadioItem>
-							{/each}
-						</DropdownMenu.RadioGroup>
-					</DropdownMenu.Content>
-				</DropdownMenu.Portal>
-			</DropdownMenu.Root>
-
-			<div class="topbar-actions">
-				<button class="btn btn-secondary" type="button" disabled={!active}>
-					<Icon name="share" size={14} />
-					Share
-				</button>
-				<button class="icon-btn" type="button" aria-label="More options">
-					<Icon name="more" />
-				</button>
-			</div>
-		</header>
-
-		<div class="scroller" bind:this={scrollerEl}>
-			{#key activeId}
-				{#if active}
-					<div class="transcript">
-						{#each active.messages as message (message.id)}
-							{#if message.role === 'user'}
-								<div class="msg-user" in:fly={{ y: 6, duration: 250, easing: quintOut }}>
-									<p class="bubble">{message.text}</p>
-								</div>
-							{:else}
-								<div class="msg-assistant" in:fly={{ y: 6, duration: 250, easing: quintOut }}>
-									<span class="logo logo-sm" aria-hidden="true">{@render sparkle(10)}</span>
-									<div class="answer-col">
-										{#if message.status === 'thinking'}
-											<p class="thinking">Thinking…</p>
-										{:else}
-											<div class="answer">
-												{#if message.rich === 'churn-analysis'}
-													{@render churnAnalysis()}
-												{:else if message.rich === 'cs-note'}
-													{@render csNote()}
-												{:else}
-													<p>
-														{message.text}{#if message.status === 'streaming'}<span class="caret"></span>{/if}
-													</p>
-												{/if}
-											</div>
-										{/if}
-
-										{#if message.status === 'done'}
-											{@render answerActions(message)}
-										{/if}
-									</div>
-								</div>
-							{/if}
-						{/each}
+<KitRoot class="halo-kit">
+	<div class="app">
+		<Sidebar bind:collapsed={sidebarCollapsed} defaultWidth={240} minWidth={200} maxWidth={360} class="side-col">
+			{#snippet children()}
+				<aside class="sidebar">
+					<div class="brand">
+						<span class="logo" aria-hidden="true">{@render sparkle(12)}</span>
+						<span class="brand-name">Halo</span>
+						<IconButton label="Close sidebar" keys={['⌘', 'B']} side="bottom" onclick={() => (sidebarCollapsed = true)}>
+							<Icon name="sidebar" />
+						</IconButton>
 					</div>
-				{:else}
-					{@render emptyState()}
+
+					<button class="btn btn-primary btn-block" type="button" onclick={startNewChat}>
+						<Icon name="plus" size={14} />
+						New chat
+					</button>
+
+					<label class="search">
+						<Icon name="search" size={14} />
+						<input bind:this={searchEl} bind:value={query} type="search" placeholder="Search chats" aria-label="Search chats" />
+						<kbd>/</kbd>
+					</label>
+
+					<nav class="history" bind:this={navEl} aria-label="Chat history">
+						{#if historyPill}
+							<span class="history-pill" style:transform="translateY({historyPill.y}px)" style:height="{historyPill.height}px"></span>
+						{/if}
+
+						{#each visibleGroups as group (group.name)}
+							<p class="group-label">{group.name}</p>
+							{#each group.items as conversation (conversation.id)}
+								<div class="history-row">
+									<button
+										class="history-item"
+										type="button"
+										aria-current={conversation.id === activeId ? 'page' : undefined}
+										onclick={() => (activeId = conversation.id)}
+									>
+										{conversation.title}
+									</button>
+									<DropdownMenu.Root>
+										<DropdownMenu.Trigger class="row-menu" aria-label="Options for {conversation.title}">
+											<Icon name="more" size={14} />
+										</DropdownMenu.Trigger>
+										<MenuContent side="right" align="start" sideOffset={8} minWidth={168}>
+											<MenuItem onSelect={() => copyLink(conversation.id)}>Copy link</MenuItem>
+											<DropdownMenu.Separator class="kit-menu-sep" />
+											<MenuItem tone="danger" onSelect={() => deleteConversation(conversation.id)}>Delete</MenuItem>
+										</MenuContent>
+									</DropdownMenu.Root>
+								</div>
+							{/each}
+						{:else}
+							<p class="history-empty">No chats match “{query}”</p>
+						{/each}
+					</nav>
+
+					<div class="usage">
+						<div class="usage-row">
+							<span>Messages this month</span>
+							<span class="tabular">412 / 1,000</span>
+						</div>
+						<div class="meter"><span style:width="41.2%"></span></div>
+					</div>
+
+					<div class="account">
+						<span class="avatar">MR</span>
+						<span class="account-text">
+							<span class="account-name">Maya Reyes</span>
+							<span class="account-plan">Pro · Northwind</span>
+						</span>
+						<DropdownMenu.Root>
+							<Tip label="Settings" side="top">
+								{#snippet trigger({ props })}
+									<DropdownMenu.Trigger {...props} class="kit-icon-btn" aria-label="Settings">
+										<Icon name="sliders" />
+									</DropdownMenu.Trigger>
+								{/snippet}
+							</Tip>
+							<MenuContent side="top" align="end" minWidth={200}>
+								<MenuItem onSelect={() => showToast('Settings are read-only in this demo')} keys={['⌘', ',']}>Settings</MenuItem>
+								<MenuItem onSelect={() => showToast('Usage resets on Dec 1')}>Usage &amp; billing</MenuItem>
+								<DropdownMenu.Separator class="kit-menu-sep" />
+								<MenuItem onSelect={() => showToast('Signed out (not really, it’s a demo)')}>Sign out</MenuItem>
+							</MenuContent>
+						</DropdownMenu.Root>
+					</div>
+				</aside>
+			{/snippet}
+		</Sidebar>
+
+		<main class="main">
+			<header class="topbar">
+				{#if sidebarCollapsed}
+					<span class="topbar-lead" in:fly={{ x: -6, duration: 200, easing: quintOut }}>
+						<IconButton label="Open sidebar" keys={['⌘', 'B']} side="bottom" onclick={() => (sidebarCollapsed = false)}>
+							<Icon name="sidebar" />
+						</IconButton>
+						<IconButton label="New chat" side="bottom" onclick={startNewChat}>
+							<Icon name="plus" />
+						</IconButton>
+					</span>
 				{/if}
-			{/key}
-		</div>
+				<h1 class="chat-title">{active?.title ?? 'New chat'}</h1>
 
-		<footer class="composer-wrap">
-			<form
-				class="composer"
-				onsubmit={(event) => {
-					event.preventDefault();
-					send(draft);
-				}}
-			>
-				<textarea
-					bind:this={composerEl}
-					bind:value={draft}
-					rows="1"
-					placeholder="Message Halo"
-					aria-label="Message Halo"
-					onkeydown={handleComposerKeydown}
-				></textarea>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger class="model-trigger">
+						{modelLabel}
+						<Icon name="chevronDown" size={14} />
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Portal>
+						<DropdownMenu.Content class="model-menu" sideOffset={6} align="start">
+							<DropdownMenu.RadioGroup bind:value={modelValue}>
+								{#each models as model (model.value)}
+									<DropdownMenu.RadioItem value={model.value} class="model-item">
+										{#snippet children({ checked })}
+											<span class="model-item-text">
+												<span class="model-item-label">{model.label}</span>
+												<span class="model-item-hint">{model.hint}</span>
+											</span>
+											{#if checked}
+												<Icon name="check" size={14} />
+											{/if}
+										{/snippet}
+									</DropdownMenu.RadioItem>
+								{/each}
+							</DropdownMenu.RadioGroup>
+						</DropdownMenu.Content>
+					</DropdownMenu.Portal>
+				</DropdownMenu.Root>
 
-				<div class="composer-bar">
-					<button class="icon-btn" type="button" aria-label="Attach file">
-						<Icon name="paperclip" />
-					</button>
-					<button class="chip" type="button" aria-pressed={webSearch} onclick={() => (webSearch = !webSearch)}>
-						<Icon name="globe" size={14} />
-						Web search
-					</button>
+				<div class="topbar-actions">
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger disabled={!active}>
+							{#snippet child({ props })}
+								<button {...props} class="btn btn-secondary" type="button">
+									<Icon name="share" size={14} />
+									Share
+								</button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<MenuContent align="end" minWidth={196}>
+							<MenuItem onSelect={() => copyLink(activeId)}>Copy link</MenuItem>
+							<MenuItem onSelect={exportMarkdown}>Export as Markdown</MenuItem>
+						</MenuContent>
+					</DropdownMenu.Root>
+					<DropdownMenu.Root>
+						<Tip label="More" side="bottom">
+							{#snippet trigger({ props })}
+								<DropdownMenu.Trigger {...props} class="kit-icon-btn" aria-label="More options" disabled={!active}>
+									<Icon name="more" />
+								</DropdownMenu.Trigger>
+							{/snippet}
+						</Tip>
+						<MenuContent align="end" minWidth={180}>
+							<MenuItem onSelect={() => copyLink(activeId)}>Copy link</MenuItem>
+							<DropdownMenu.Separator class="kit-menu-sep" />
+							<MenuItem tone="danger" onSelect={() => active && deleteConversation(active.id)}>Delete chat</MenuItem>
+						</MenuContent>
+					</DropdownMenu.Root>
+				</div>
+			</header>
 
-					<span class="composer-hint"><kbd>↵</kbd> send <kbd>⇧↵</kbd> new line</span>
+			<div class="scroller" bind:this={scrollerEl}>
+				{#key activeId}
+					{#if active}
+						<div class="transcript">
+							{#each active.messages as message (message.id)}
+								{#if message.role === 'user'}
+									<div class="msg-user" in:fly={{ y: 6, duration: 250, easing: quintOut }}>
+										<p class="bubble">{message.text}</p>
+									</div>
+								{:else}
+									<div class="msg-assistant" in:fly={{ y: 6, duration: 250, easing: quintOut }}>
+										<span class="logo logo-sm" aria-hidden="true">{@render sparkle(10)}</span>
+										<div class="answer-col">
+											{#if message.status === 'thinking'}
+												<p class="thinking">Thinking…</p>
+											{:else}
+												<div class="answer" bind:this={answerEls[message.id]}>
+													{#if message.rich === 'churn-analysis'}
+														{@render churnAnalysis()}
+													{:else if message.rich === 'cs-note'}
+														{@render csNote()}
+													{:else}
+														<p>
+															{message.text}{#if message.status === 'streaming'}<span class="caret"></span>{/if}
+														</p>
+													{/if}
+												</div>
+											{/if}
 
-					{#if isResponding}
-						<button class="send" type="button" aria-label="Stop responding" onclick={stopResponding}>
-							<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="currentColor" /></svg>
-						</button>
+											{#if message.status === 'done'}
+												{@render answerActions(message)}
+											{/if}
+										</div>
+									</div>
+								{/if}
+							{/each}
+						</div>
 					{:else}
-						<button class="send" type="submit" aria-label="Send message" disabled={!canSend}>
-							<Icon name="arrowUp" size={14} />
+						{@render emptyState()}
+					{/if}
+				{/key}
+			</div>
+
+			<footer class="composer-wrap">
+				<form
+					class="composer"
+					onsubmit={(event) => {
+						event.preventDefault();
+						send(draft);
+					}}
+				>
+					{#if attachments.length}
+						<div class="attachments">
+							{#each attachments as a (a.id)}
+								<span class="attachment" in:fly={{ y: 4, duration: 180, easing: quintOut }} out:fade={{ duration: 100 }}>
+									<Icon name="file" size={12} />
+									<span class="attachment-name">{a.name}</span>
+									<button type="button" class="attachment-x" aria-label="Remove {a.name}" onclick={() => removeAttachment(a.id)}>
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+									</button>
+								</span>
+							{/each}
+						</div>
+					{/if}
+					<textarea
+						bind:this={composerEl}
+						bind:value={draft}
+						rows="1"
+						placeholder="Message Halo"
+						aria-label="Message Halo"
+						onkeydown={handleComposerKeydown}
+					></textarea>
+
+					<div class="composer-bar">
+						<input bind:this={fileInput} type="file" multiple hidden onchange={addFiles} />
+						<IconButton label="Attach files" onclick={() => fileInput?.click()}>
+							<Icon name="paperclip" />
+						</IconButton>
+						<button class="chip" type="button" aria-pressed={webSearch} onclick={() => (webSearch = !webSearch)}>
+							<Icon name="globe" size={14} />
+							Web search
 						</button>
+
+						<span class="composer-hint"><kbd>↵</kbd> send <kbd>⇧↵</kbd> new line</span>
+
+						{#if isResponding}
+							<button class="send" type="button" aria-label="Stop responding" onclick={stopResponding}>
+								<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="currentColor" /></svg>
+							</button>
+						{:else}
+							<button class="send" type="submit" aria-label="Send message" disabled={!canSend}>
+								<Icon name="arrowUp" size={14} />
+							</button>
+						{/if}
+					</div>
+				</form>
+				<div class="composer-error"><FieldError message={attachError} /></div>
+			</footer>
+		</main>
+
+		{#if toast}
+			{#key toast.id}
+				<div class="toast" role="status" in:fly={{ y: 12, duration: 240, easing: quintOut }} out:fade={{ duration: 140 }}>
+					{toast.text}
+					{#if toast.undo}
+						<button type="button" class="toast-undo" onclick={undoToast}>Undo</button>
 					{/if}
 				</div>
-			</form>
-		</footer>
-	</main>
-</div>
+			{/key}
+		{/if}
+	</div>
+</KitRoot>
 
 {#snippet sparkle(size: number)}
 	<svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
@@ -373,18 +540,16 @@
 
 {#snippet answerActions(message: Message)}
 	<div class="actions">
-		<button class="icon-btn icon-btn-sm" type="button" aria-label="Copy answer" onclick={(event) => copyAnswer(event.currentTarget, message)}>
-			<Icon name={copiedKey === `message-${message.id}` ? 'check' : 'copy'} size={14} />
-		</button>
-		<button class="icon-btn icon-btn-sm" type="button" aria-label="Regenerate answer">
+		<CopyButton text={() => answerEls[message.id]?.innerText ?? message.text} label="Copy answer" class="act-btn" />
+		<IconButton label="Regenerate" class="act-btn" disabled={isResponding} onclick={() => regenerate(message)}>
 			<Icon name="retry" size={14} />
-		</button>
-		<button class="icon-btn icon-btn-sm" type="button" aria-label="Good answer">
+		</IconButton>
+		<IconButton label="Good answer" class="act-btn rate" aria-pressed={feedback[message.id] === 'up'} onclick={() => rate(message, 'up')}>
 			<Icon name="thumbsUp" size={14} />
-		</button>
-		<button class="icon-btn icon-btn-sm" type="button" aria-label="Bad answer">
+		</IconButton>
+		<IconButton label="Bad answer" class="act-btn rate" aria-pressed={feedback[message.id] === 'down'} onclick={() => rate(message, 'down')}>
 			<Icon name="thumbsDown" size={14} />
-		</button>
+		</IconButton>
 		<span class="actions-meta">{modelLabel} · 2.1s</span>
 	</div>
 {/snippet}
@@ -445,16 +610,9 @@
 	<div class="draft">
 		<div class="draft-head">
 			<span># cs-team</span>
-			<button
-				class="btn btn-secondary btn-xs"
-				type="button"
-				onclick={(event) => copyDraft(event.currentTarget)}
-			>
-				<Icon name={copiedKey === 'draft' ? 'check' : 'copy'} size={12} />
-				{copiedKey === 'draft' ? 'Copied' : 'Copy'}
-			</button>
+			<CopyButton variant="text" text={() => draftBodyEl?.innerText ?? ''} class="draft-copy" />
 		</div>
-		<div class="draft-body">
+		<div class="draft-body" bind:this={draftBodyEl}>
 			<p>Hi team, quick update on September churn.</p>
 			<p>
 				Logo churn hit 3.4% (up from 2.1%), driven by Starter monthly accounts after the Sep 4 price change.
@@ -493,6 +651,22 @@
 {/snippet}
 
 <style>
+	/* KitRoot wrapper: no box, only themes the portalled menus and tooltips */
+	:global(.halo-kit) {
+		display: contents;
+		font-family: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+		--kit-pop-radius: 10px;
+		--kit-item-radius: 6px;
+		--kit-item-height: 28px;
+		--kit-accent: #0a0a0a;
+		--kit-success: #0a0a0a;
+		--kit-icon-btn-radius: 8px;
+		--kit-icon-btn-color: #737373;
+		--kit-icon-btn-hover-bg: #efefef;
+		--kit-icon-btn-pressed-color: #0a0a0a;
+		--kit-handle-active: #0a0a0a;
+	}
+
 	.app {
 		--bg: #ffffff;
 		--bg-subtle: #f7f7f7;
@@ -516,7 +690,7 @@
 		position: fixed;
 		inset: 0;
 		display: grid;
-		grid-template-columns: 232px minmax(0, 1fr);
+		grid-template-columns: auto minmax(0, 1fr);
 		background: var(--bg);
 		color: var(--fg);
 		font-family: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
@@ -602,42 +776,10 @@
 		width: 100%;
 	}
 
-	.btn-xs {
-		height: 22px;
-		padding: 0 7px;
-		gap: 4px;
-		border-radius: 6px;
-		font-size: 12px;
-	}
 
-	.icon-btn {
-		display: inline-grid;
-		place-items: center;
-		flex-shrink: 0;
-		width: 28px;
-		height: 28px;
-		border-radius: 8px;
-		color: var(--fg-secondary);
-		transition:
-			background 100ms var(--ease-out),
-			color 100ms var(--ease-out),
-			transform 150ms var(--ease-out);
-	}
 
-	.icon-btn:active {
-		transform: scale(0.94);
-	}
 
-	.icon-btn:focus-visible {
-		outline: none;
-		box-shadow: var(--shadow-focus);
-	}
 
-	.icon-btn-sm {
-		width: 24px;
-		height: 24px;
-		border-radius: 6px;
-	}
 
 	@media (hover: hover) {
 		.btn-primary:hover:not(:disabled) {
@@ -648,10 +790,6 @@
 			background: linear-gradient(#fff, #f1f1f1);
 		}
 
-		.icon-btn:hover {
-			background: var(--bg-hover);
-			color: var(--fg);
-		}
 	}
 
 	/* Logo */
@@ -686,6 +824,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
+		height: 100%;
 		min-height: 0;
 		padding: 10px 8px 8px;
 		background: var(--bg-subtle);
@@ -697,7 +836,7 @@
 		align-items: center;
 		gap: 8px;
 		height: 28px;
-		padding-left: 4px;
+		padding-left: 8px;
 		margin-bottom: 4px;
 	}
 
@@ -780,9 +919,54 @@
 		padding-top: 6px;
 	}
 
+	/* row: title button plus a menu trigger that appears on hover, focus or while open */
+	.history-row {
+		position: relative;
+		flex-shrink: 0;
+	}
+
+	.history-row :global(.row-menu) {
+		position: absolute;
+		top: 2px;
+		right: 2px;
+		z-index: 2;
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		border-radius: 6px;
+		color: var(--fg-secondary);
+		opacity: 0;
+		transition:
+			opacity 100ms var(--ease-out),
+			background 100ms var(--ease-out);
+	}
+
+	.history-row:hover :global(.row-menu),
+	.history-row :global(.row-menu:focus-visible),
+	.history-row :global(.row-menu[data-state='open']) {
+		opacity: 1;
+	}
+
+	.history-row :global(.row-menu:hover),
+	.history-row :global(.row-menu[data-state='open']) {
+		background: var(--bg-hover);
+		color: var(--fg);
+	}
+
+	.history-row :global(.row-menu:focus-visible) {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+
+	.history-row:hover .history-item {
+		padding-right: 30px;
+	}
+
 	.history-item {
 		position: relative;
 		display: block;
+		width: 100%;
 		flex-shrink: 0;
 		height: 28px;
 		padding: 0 8px;
@@ -859,7 +1043,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 2px 0 0 4px;
+		padding: 2px 0 0 8px;
 	}
 
 	.avatar {
@@ -1342,7 +1526,8 @@
 		transition: box-shadow 150ms var(--ease-out);
 	}
 
-	.composer:focus-within {
+	/* the composer draws the ring for its textarea; the textarea never draws its own */
+	.composer:has(textarea:focus) {
 		box-shadow: 0 0 0 1px rgb(0 0 0 / 0.18), 0 6px 20px -6px rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.04);
 	}
 
@@ -1363,6 +1548,61 @@
 
 	.composer textarea::placeholder {
 		color: var(--fg-tertiary);
+	}
+
+	.attachments {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		padding: 10px 10px 0;
+	}
+
+	.attachment {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		height: 26px;
+		padding: 0 4px 0 8px;
+		border-radius: 8px;
+		background: var(--bg-subtle);
+		box-shadow: inset 0 0 0 1px var(--border);
+		color: var(--fg);
+		font-size: 12px;
+	}
+
+	.attachment-name {
+		max-width: 180px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.attachment-x {
+		display: grid;
+		place-items: center;
+		width: 18px;
+		height: 18px;
+		border-radius: 5px;
+		color: var(--fg-tertiary);
+		transition:
+			background 100ms var(--ease-out),
+			color 100ms var(--ease-out);
+	}
+
+	.attachment-x:hover {
+		background: var(--bg-hover);
+		color: var(--fg);
+	}
+
+	.attachment-x svg {
+		width: 12px;
+		height: 12px;
+	}
+
+	.composer-error {
+		max-width: 680px;
+		margin: 0 auto;
+		padding-left: 4px;
 	}
 
 	.composer-bar {
@@ -1443,6 +1683,78 @@
 	.send:focus-visible {
 		outline: none;
 		box-shadow: var(--shadow-focus), var(--shadow-btn-primary);
+	}
+
+	.topbar-lead {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		margin-left: -8px;
+	}
+
+	/* answer actions */
+	.actions :global(.act-btn) {
+		--kit-icon-btn-size: 24px;
+		--kit-icon-size: 14px;
+		--kit-icon-btn-radius: 6px;
+	}
+
+	.actions :global(.rate[aria-pressed='true'] svg) {
+		animation: rate-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+		fill: rgb(10 10 10 / 0.08);
+	}
+
+	@keyframes rate-pop {
+		40% {
+			transform: scale(1.25) rotate(-8deg);
+		}
+	}
+
+	.draft-head :global(.draft-copy) {
+		--kit-text-btn-height: 22px;
+		--kit-icon-btn-color: var(--fg-secondary);
+		background: linear-gradient(#fff, #f7f7f7);
+		box-shadow: var(--shadow-btn);
+		font-size: 12px;
+	}
+
+	.toast {
+		position: fixed;
+		right: 20px;
+		bottom: 20px;
+		z-index: 70;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		height: 36px;
+		padding: 0 6px 0 12px;
+		border-radius: 10px;
+		background: #171717;
+		color: #fafafa;
+		font-size: 13px;
+		box-shadow: 0 8px 24px -6px rgb(0 0 0 / 0.3);
+	}
+
+	.toast-undo {
+		height: 24px;
+		padding: 0 8px;
+		border-radius: 6px;
+		background: rgb(255 255 255 / 0.12);
+		color: #fff;
+		font-size: 12px;
+		font-weight: 500;
+		transition: background 100ms var(--ease-out);
+	}
+
+	.toast-undo:hover {
+		background: rgb(255 255 255 / 0.2);
+	}
+
+	/* narrow screens: the history column gives way to the conversation */
+	@media (max-width: 767px) {
+		.app :global(.side-col) {
+			display: none;
+		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {

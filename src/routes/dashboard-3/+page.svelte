@@ -1,10 +1,121 @@
 <script lang="ts">
 	import '@fontsource-variable/inter';
-	import { Switch } from 'bits-ui';
+	import IconButton from '#lib/kit/IconButton.svelte';
+	import KitRoot from '#lib/kit/KitRoot.svelte';
+	import MenuContent from '#lib/kit/MenuContent.svelte';
+	import MenuItem from '#lib/kit/MenuItem.svelte';
+	import MenuRadioItem from '#lib/kit/MenuRadioItem.svelte';
+	import Sidebar from '#lib/kit/Sidebar.svelte';
+	import Tip from '#lib/kit/Tip.svelte';
+	import { DropdownMenu, Switch } from 'bits-ui';
+	import { onDestroy } from 'svelte';
+	import { cubicOut } from 'svelte/easing';
+	import { fade, fly } from 'svelte/transition';
 
 	let compare = $state(true);
 	let range = $state(2);
+	let segment = $state('all');
+	let source = $state('all');
+	let query = $state('');
+	let activeView = $state('Overview');
+	let railed = $state(false);
+	let workspace = $state('northwind');
+	let toast = $state<{ id: number; text: string } | null>(null);
+	let toastTimer: ReturnType<typeof setTimeout> | undefined;
+	let toastSeq = 0;
+	let searchEl: HTMLInputElement | undefined = $state();
+
 	const ranges = ['24h', '7d', '30d', '90d'];
+	const RANGE_LABELS = ['Last 24 hours', 'Last 7 days', 'Last 30 days', 'Last 90 days'];
+	/** Share of the 30-day totals each range covers; the demo scales its numbers by these. */
+	const RANGE_SCALE = [0.034, 0.24, 1, 2.86];
+	const SEGMENTS = [
+		{ value: 'all', label: 'All users', scale: 1 },
+		{ value: 'new', label: 'New users', scale: 0.38 },
+		{ value: 'returning', label: 'Returning', scale: 0.62 }
+	];
+	const SOURCES = [
+		{ value: 'all', label: 'All channels', scale: 1 },
+		{ value: 'direct', label: 'Direct', scale: 0.38 },
+		{ value: 'organic', label: 'Organic search', scale: 0.29 },
+		{ value: 'referral', label: 'Referral', scale: 0.14 }
+	];
+	const WORKSPACES = [
+		{ value: 'northwind', label: 'Northwind Labs', initial: 'N' },
+		{ value: 'tailspin', label: 'Tailspin Toys', initial: 'T' }
+	];
+
+	let notifications = $state([
+		{ id: 1, text: 'Conversion rate passed 4.8%', time: '12m', unread: true },
+		{ id: 2, text: 'Weekly report is ready', time: '2h', unread: true },
+		{ id: 3, text: 'Paid social spend alert resolved', time: '1d', unread: false }
+	]);
+	const unreadCount = $derived(notifications.filter((n) => n.unread).length);
+
+	const segmentLabel = $derived(SEGMENTS.find((x) => x.value === segment)?.label ?? 'All users');
+	const sourceLabel = $derived(SOURCES.find((x) => x.value === source)?.label ?? 'All channels');
+	const workspaceInfo = $derived(WORKSPACES.find((w) => w.value === workspace) ?? WORKSPACES[0]);
+	const scale = $derived(
+		RANGE_SCALE[range] *
+			(SEGMENTS.find((x) => x.value === segment)?.scale ?? 1) *
+			(SOURCES.find((x) => x.value === source)?.scale ?? 1)
+	);
+	const rangeValue = $derived(String(range));
+
+	function setRange(value: string) {
+		const next = Number(value);
+		if (Number.isInteger(next) && next >= 0 && next < ranges.length) range = next;
+	}
+
+	function showToast(text: string) {
+		clearTimeout(toastTimer);
+		toast = { id: toastSeq++, text };
+		toastTimer = setTimeout(() => (toast = null), 3200);
+	}
+
+	onDestroy(() => clearTimeout(toastTimer));
+
+	async function copyUrl(path: string) {
+		const url = `https://northwind.dev${path}`;
+		try {
+			await navigator.clipboard.writeText(url);
+			showToast(`Copied ${url}`);
+		} catch (error) {
+			console.error('Clipboard write was refused', error);
+			showToast('Couldn’t copy. Check clipboard permissions.');
+		}
+	}
+
+	function exportCsv() {
+		const rows = [['page', 'views', 'change', 'share'], ...visiblePages.map((p) => [p.path, p.views.replace(/,/g, ''), p.delta, `${p.share}%`])];
+		const url = URL.createObjectURL(new Blob([rows.map((r) => r.join(',')).join('\n')], { type: 'text/csv' }));
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `top-pages-${ranges[range]}.csv`;
+		link.click();
+		URL.revokeObjectURL(url);
+		showToast(`Exported top-pages-${ranges[range]}.csv`);
+	}
+
+	function onWindowKeydown(event: KeyboardEvent) {
+		const target = event.target;
+		const isTyping = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+		if (event.key === '/' && !isTyping) {
+			event.preventDefault();
+			searchEl?.focus();
+		} else if (event.key === 'Escape' && target === searchEl) {
+			query = '';
+			searchEl?.blur();
+		}
+	}
+
+	function markAllRead() {
+		for (const n of notifications) n.unread = false;
+	}
+
+	function formatScaled(base: number): string {
+		return Math.round(base * scale).toLocaleString('en-US');
+	}
 
 	/* ---- chart data: daily sessions, last 30 days vs previous period ---- */
 	const W = 720;
@@ -61,12 +172,12 @@
 		{ i: 29, l: 'Nov 3' }
 	];
 
-	const kpis = [
-		{ label: 'Sessions', value: '128,947', delta: '▲ +12.4%', up: true, note: 'vs prev 30d' },
-		{ label: 'Active users', value: '41,203', delta: '▲ +8.1%', up: true, note: 'vs prev 30d' },
-		{ label: 'Conversion rate', value: '4.87%', delta: '▲ +0.4pp', up: true, note: 'vs prev 30d' },
-		{ label: 'Avg. session', value: '3m 42s', delta: '▼ −2.3%', up: false, note: 'vs prev 30d' }
-	];
+	const kpis = $derived([
+		{ label: 'Sessions', value: formatScaled(128947), delta: '▲ +12.4%', up: true, note: `vs prev ${ranges[range]}` },
+		{ label: 'Active users', value: formatScaled(41203), delta: '▲ +8.1%', up: true, note: `vs prev ${ranges[range]}` },
+		{ label: 'Conversion rate', value: '4.87%', delta: '▲ +0.4pp', up: true, note: `vs prev ${ranges[range]}` },
+		{ label: 'Avg. session', value: '3m 42s', delta: '▼ −2.3%', up: false, note: `vs prev ${ranges[range]}` }
+	]);
 
 	const nav: { group: string; items: { icon: string; label: string; active?: boolean; count?: number; live?: boolean }[] }[] = [
 		{
@@ -113,6 +224,8 @@
 		{ path: '/docs/api', views: '7,412', delta: '+11.4%', up: true, share: 3.9 }
 	];
 
+	const visiblePages = $derived(pages.filter((p) => p.path.includes(query.trim().toLowerCase())));
+
 	const convs = [
 		{ init: 'SW', name: 'Sophia Williams', hue: 'blue', plan: 'Pro', src: 'Direct', amt: '$29', time: '2m' },
 		{ init: 'AK', name: 'Andrej Kovac', hue: 'green', plan: 'Business', src: 'Organic', amt: '$79', time: '14m' },
@@ -145,63 +258,115 @@
 	<title>Overview · Northwind Analytics</title>
 </svelte:head>
 
+<svelte:window onkeydown={onWindowKeydown} />
+
+<KitRoot class="dash-kit">
 <div class="dash">
 	<!-- ===================== sidebar ===================== -->
-	<aside class="side">
-		<button class="ws" type="button">
-			<span class="tile">N</span>
-			<span class="ws-name">Northwind Labs</span>
-			<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.chev}</svg>
-		</button>
+	<Sidebar bind:collapsed={railed} defaultWidth={212} minWidth={188} maxWidth={320} collapsedWidth={56} class="side-col">
+		{#snippet children({ collapsed })}
+			<aside class="side" class:rail={collapsed}>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<button {...props} class="ws" type="button">
+								<span class="tile">{workspaceInfo.initial}</span>
+								<span class="ws-name fades">{workspaceInfo.label}</span>
+								<svg class="fades" viewBox="0 0 24 24" aria-hidden="true">{@html icons.chev}</svg>
+							</button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<MenuContent minWidth={220}>
+						<DropdownMenu.Group>
+							<DropdownMenu.GroupHeading class="kit-menu-label">Workspaces</DropdownMenu.GroupHeading>
+							<DropdownMenu.RadioGroup bind:value={workspace}>
+								{#each WORKSPACES as w (w.value)}
+									<MenuRadioItem value={w.value}>{w.label}</MenuRadioItem>
+								{/each}
+							</DropdownMenu.RadioGroup>
+						</DropdownMenu.Group>
+						<DropdownMenu.Separator class="kit-menu-sep" />
+						<MenuItem onSelect={() => showToast('Invite link copied')}>Invite teammates</MenuItem>
+					</MenuContent>
+				</DropdownMenu.Root>
 
-		{#each nav as group (group.group)}
-			<span class="nav-label">{group.group}</span>
-			<nav class="nav">
-				{#each group.items as item (item.label)}
-					<button class="nav-item" class:active={item.active} type="button">
-						<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons[item.icon]}</svg>
-						<span>{item.label}</span>
-						{#if item.live}
-							<span class="nav-live"><i class="live-dot"></i>42</span>
-						{:else if item.count != null}
-							<span class="nav-count">{item.count}</span>
-						{/if}
-					</button>
+				{#each nav as group (group.group)}
+					<span class="nav-label">{group.group}</span>
+					<nav class="nav" aria-label={group.group}>
+						{#each group.items as item (item.label)}
+							<Tip label={item.label} side="right" disabled={!collapsed}>
+								{#snippet trigger({ props })}
+									<button
+										{...props}
+										class="nav-item"
+										class:active={activeView === item.label}
+										aria-current={activeView === item.label ? 'page' : undefined}
+										aria-label={collapsed ? item.label : undefined}
+										type="button"
+										onclick={() => (activeView = item.label)}
+									>
+										<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons[item.icon]}</svg>
+										<span class="fades">{item.label}</span>
+										{#if item.live}
+											<span class="nav-live fades"><i class="live-dot"></i>42</span>
+										{:else if item.count != null}
+											<span class="nav-count fades">{item.count}</span>
+										{/if}
+									</button>
+								{/snippet}
+							</Tip>
+						{/each}
+					</nav>
 				{/each}
-			</nav>
-		{/each}
 
-		<div class="usage">
-			<div class="usage-top">
-				<span class="usage-label">Events</span>
-				<span class="usage-val">8.2M / 10M</span>
-			</div>
-			<div class="usage-bar"><i style="width:82%"></i></div>
-			<span class="usage-note">Resets Nov 1</span>
-		</div>
+				<div class="usage fades">
+					<div class="usage-top">
+						<span class="usage-label">Events</span>
+						<span class="usage-val">8.2M / 10M</span>
+					</div>
+					<div class="usage-bar"><i style="width:82%"></i></div>
+					<span class="usage-note">Resets Nov 1</span>
+				</div>
 
-		<button class="me" type="button">
-			<span class="av av-blue">AK</span>
-			<span class="me-txt">
-				<span class="me-name">Aidan Kowalski</span>
-				<span class="me-sub">Pro plan</span>
-			</span>
-			<svg class="me-more" viewBox="0 0 24 24" aria-hidden="true">{@html icons.more}</svg>
-		</button>
-	</aside>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<button {...props} class="me" type="button">
+								<span class="av av-blue">AK</span>
+								<span class="me-txt fades">
+									<span class="me-name">Aidan Kowalski</span>
+									<span class="me-sub">Pro plan</span>
+								</span>
+								<svg class="me-more fades" viewBox="0 0 24 24" aria-hidden="true">{@html icons.more}</svg>
+							</button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<MenuContent side="top" minWidth={216}>
+						<MenuItem onSelect={() => showToast('Profile is read-only in this demo')}>Profile</MenuItem>
+						<MenuItem onSelect={() => (railed = !railed)} keys={['⌘', 'B']}>{railed ? 'Expand sidebar' : 'Collapse sidebar'}</MenuItem>
+						<DropdownMenu.Separator class="kit-menu-sep" />
+						<MenuItem onSelect={() => showToast('Signed out (not really, it’s a demo)')}>Sign out</MenuItem>
+					</MenuContent>
+				</DropdownMenu.Root>
+			</aside>
+		{/snippet}
+	</Sidebar>
 
 	<!-- ===================== main ===================== -->
 	<div class="main">
 		<header class="topbar">
+			<IconButton label={railed ? 'Expand sidebar' : 'Collapse sidebar'} keys={['⌘', 'B']} side="bottom" class="rail-toggle" onclick={() => (railed = !railed)}>
+				<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M9 3v18" /></svg>
+			</IconButton>
 			<div class="crumbs">
 				<span>Analytics</span>
 				<span class="crumb-sep">/</span>
-				<span class="crumb-cur">Overview</span>
+				<span class="crumb-cur">{activeView}</span>
 			</div>
 
 			<label class="search">
 				<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.search}</svg>
-				<input type="text" placeholder="Search reports…" />
+				<input type="text" placeholder="Filter pages…" aria-label="Filter top pages" bind:value={query} bind:this={searchEl} />
 				<kbd class="key">/</kbd>
 			</label>
 
@@ -219,23 +384,88 @@
 
 				<span class="sep"></span>
 
-				<button class="iconbtn" type="button" aria-label="Pick dates">
-					<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.calendar}</svg>
-				</button>
-				<button class="iconbtn bell" type="button" aria-label="Notifications">
-					<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.bell}</svg>
-					<i class="bell-dot"></i>
-				</button>
-				<button class="iconbtn" type="button" aria-label="Help">
-					<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.help}</svg>
-				</button>
+				<DropdownMenu.Root>
+					<Tip label="Date range" side="bottom">
+						{#snippet trigger({ props: tipProps })}
+							<DropdownMenu.Trigger {...tipProps}>
+								{#snippet child({ props })}
+									<button {...props} class="iconbtn" type="button" aria-label="Date range">
+										<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.calendar}</svg>
+									</button>
+								{/snippet}
+							</DropdownMenu.Trigger>
+						{/snippet}
+					</Tip>
+					<MenuContent align="end" minWidth={200}>
+						<DropdownMenu.RadioGroup value={rangeValue} onValueChange={setRange}>
+							{#each RANGE_LABELS as label, i (label)}
+								<MenuRadioItem value={String(i)} meta={ranges[i]}>{label}</MenuRadioItem>
+							{/each}
+						</DropdownMenu.RadioGroup>
+					</MenuContent>
+				</DropdownMenu.Root>
+				<DropdownMenu.Root>
+					<Tip label="Notifications" side="bottom">
+						{#snippet trigger({ props: tipProps })}
+							<DropdownMenu.Trigger {...tipProps}>
+								{#snippet child({ props })}
+									<button {...props} class="iconbtn bell" type="button" aria-label="Notifications, {unreadCount} unread">
+										<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.bell}</svg>
+										{#if unreadCount}<i class="bell-dot" out:fade={{ duration: 150 }}></i>{/if}
+									</button>
+								{/snippet}
+							</DropdownMenu.Trigger>
+						{/snippet}
+					</Tip>
+					<MenuContent align="end" minWidth={280}>
+						<DropdownMenu.Group>
+							<DropdownMenu.GroupHeading class="kit-menu-label">Notifications</DropdownMenu.GroupHeading>
+							{#each notifications as n (n.id)}
+								<MenuItem onSelect={() => (n.unread = false)} closeOnSelect={false} meta={n.time}>
+									<span class="note-dot" class:unread={n.unread}></span>
+									<span class="note-text">{n.text}</span>
+								</MenuItem>
+							{/each}
+						</DropdownMenu.Group>
+						<DropdownMenu.Separator class="kit-menu-sep" />
+						<MenuItem onSelect={markAllRead} disabled={unreadCount === 0}>Mark all as read</MenuItem>
+					</MenuContent>
+				</DropdownMenu.Root>
+				<DropdownMenu.Root>
+					<Tip label="Help" side="bottom">
+						{#snippet trigger({ props: tipProps })}
+							<DropdownMenu.Trigger {...tipProps}>
+								{#snippet child({ props })}
+									<button {...props} class="iconbtn" type="button" aria-label="Help">
+										<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.help}</svg>
+									</button>
+								{/snippet}
+							</DropdownMenu.Trigger>
+						{/snippet}
+					</Tip>
+					<MenuContent align="end" minWidth={208}>
+						<MenuItem onSelect={() => showToast('Docs open in a new tab in the real app')}>Documentation</MenuItem>
+						<MenuItem onSelect={() => showToast('⌘B sidebar · / filter pages')} keys={['?']}>Keyboard shortcuts</MenuItem>
+						<MenuItem onSelect={() => showToast('Support replies within a day')}>Contact support</MenuItem>
+					</MenuContent>
+				</DropdownMenu.Root>
 
 				<span class="sep"></span>
 
-				<button class="btn btn-primary" type="button">
-					<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.download}</svg>
-					Export
-				</button>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<button {...props} class="btn btn-primary" type="button">
+								<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.download}</svg>
+								Export
+							</button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<MenuContent align="end" minWidth={196}>
+						<MenuItem onSelect={exportCsv} meta=".csv">Top pages</MenuItem>
+						<MenuItem onSelect={() => showToast('PNG export is not part of this demo')} meta=".png">Sessions chart</MenuItem>
+					</MenuContent>
+				</DropdownMenu.Root>
 			</div>
 		</header>
 
@@ -243,25 +473,13 @@
 			<!-- header row -->
 			<div class="head enter" style="--i:0">
 				<div>
-					<h1>Overview</h1>
-					<p class="sub">Oct 5 – Nov 3, 2026 · Compared to previous 30 days</p>
+					<h1>{activeView}</h1>
+					<p class="sub">{RANGE_LABELS[range]} · {segmentLabel} · {sourceLabel}</p>
 				</div>
 				<div class="filters">
-					<button class="chip" type="button">
-						<span class="chip-k">Range</span>
-						<span class="chip-v">Last 30 days</span>
-						<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.chev}</svg>
-					</button>
-					<button class="chip" type="button">
-						<span class="chip-k">Segment</span>
-						<span class="chip-v">All users</span>
-						<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.chev}</svg>
-					</button>
-					<button class="chip" type="button">
-						<span class="chip-k">Source</span>
-						<span class="chip-v">All channels</span>
-						<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.chev}</svg>
-					</button>
+					{@render chipMenu('Range', RANGE_LABELS[range], rangeValue, setRange, RANGE_LABELS.map((label, i) => ({ value: String(i), label })))}
+					{@render chipMenu('Segment', segmentLabel, segment, (v) => (segment = v), SEGMENTS)}
+					{@render chipMenu('Source', sourceLabel, source, (v) => (source = v), SOURCES)}
 					<span class="sep"></span>
 					<span class="cmp">
 						<span class="cmp-k">Compare</span>
@@ -386,14 +604,14 @@
 							<h2>Top pages</h2>
 							<p class="csub">By views</p>
 						</div>
-						<button class="linkbtn" type="button">
+						<button class="linkbtn" type="button" onclick={() => (activeView = 'Reports')}>
 							Full report
 							<svg viewBox="0 0 24 24" aria-hidden="true">
 								<path d="M7 17 17 7" /><path d="M7 7h10v10" />
 							</svg>
 						</button>
 					</div>
-					<div class="table">
+					<div class="pages-table">
 						<div class="thead">
 							<span>Page</span>
 							<span class="num">Views</span>
@@ -401,7 +619,7 @@
 							<span>Share</span>
 							<span></span>
 						</div>
-						{#each pages as p (p.path)}
+						{#each visiblePages as p (p.path)}
 							<div class="trow">
 								<span class="tpath">{p.path}</span>
 								<span class="num tviews">{p.views}</span>
@@ -412,9 +630,24 @@
 									<i class="share-bar"><i style="width:{(p.share / 24.3) * 100}%"></i></i>
 									<span class="share-num">{p.share.toFixed(1)}%</span>
 								</span>
-								<button class="rowbtn" type="button" aria-label="Actions for {p.path}">
-									<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.more}</svg>
-								</button>
+								<DropdownMenu.Root>
+									<DropdownMenu.Trigger>
+										{#snippet child({ props })}
+											<button {...props} class="rowbtn" type="button" aria-label="Actions for {p.path}">
+												<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.more}</svg>
+											</button>
+										{/snippet}
+									</DropdownMenu.Trigger>
+									<MenuContent align="end" minWidth={180}>
+										<MenuItem onSelect={() => copyUrl(p.path)}>Copy URL</MenuItem>
+										<MenuItem onSelect={() => (query = p.path)}>Filter to this page</MenuItem>
+									</MenuContent>
+								</DropdownMenu.Root>
+							</div>
+						{:else}
+							<div class="tempty" in:fade={{ duration: 150 }}>
+								No pages match “{query.trim()}”.
+								<button class="linkbtn" type="button" onclick={() => (query = '')}>Clear filter</button>
 							</div>
 						{/each}
 					</div>
@@ -447,11 +680,39 @@
 
 			<footer class="foot enter" style="--i:4">
 				<span>Updated 2 min ago · All times UTC−05</span>
-				<span>Northwind Labs · Analytics v2.4.1</span>
+				<span>{workspaceInfo.label} · Analytics v2.4.1</span>
 			</footer>
 		</div>
 	</div>
+
+	{#if toast}
+		{#key toast.id}
+			<div class="toast" role="status" in:fly={{ y: 12, duration: 240, easing: cubicOut }} out:fade={{ duration: 140 }}>{toast.text}</div>
+		{/key}
+	{/if}
 </div>
+</KitRoot>
+
+{#snippet chipMenu(key: string, current: string, value: string, onChange: (value: string) => void, options: readonly { value: string; label: string }[])}
+	<DropdownMenu.Root>
+		<DropdownMenu.Trigger>
+			{#snippet child({ props })}
+				<button {...props} class="chip" type="button">
+					<span class="chip-k">{key}</span>
+					<span class="chip-v">{current}</span>
+					<svg viewBox="0 0 24 24" aria-hidden="true">{@html icons.chev}</svg>
+				</button>
+			{/snippet}
+		</DropdownMenu.Trigger>
+		<MenuContent minWidth={180}>
+			<DropdownMenu.RadioGroup {value} onValueChange={onChange}>
+				{#each options as o (o.value)}
+					<MenuRadioItem value={o.value}>{o.label}</MenuRadioItem>
+				{/each}
+			</DropdownMenu.RadioGroup>
+		</MenuContent>
+	</DropdownMenu.Root>
+{/snippet}
 
 <style>
 	/* ---------- tokens (giga-ui dark set, light-blue accent) ---------- */
@@ -497,6 +758,35 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 		flex-shrink: 0;
+	}
+
+	/* KitRoot wrapper: no box of its own, it only themes the portalled menus and tooltips */
+	:global(.dash-kit) {
+		display: contents;
+		font-family: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+		--kit-pop-bg: #1c1c1c;
+		--kit-pop-text: #fafafa;
+		--kit-pop-muted: #a1a1a1;
+		--kit-pop-line: rgb(255 255 255 / 0.08);
+		--kit-pop-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 12px 32px -8px rgb(0 0 0 / 0.6), 0 4px 8px -4px rgb(0 0 0 / 0.4);
+		--kit-pop-radius: 10px;
+		--kit-item-radius: 6px;
+		--kit-item-height: 28px;
+		--kit-item-hover: rgb(255 255 255 / 0.06);
+		--kit-accent: #8ecaff;
+		--kit-danger: #f87171;
+		--kit-danger-bg: rgb(248 113 113 / 0.1);
+		--kit-success: #4ade80;
+		--kit-tip-bg: #2a2a2a;
+		--kit-tip-text: #fafafa;
+		--kit-key-bg: rgb(255 255 255 / 0.08);
+		--kit-icon-btn-size: 28px;
+		--kit-icon-btn-radius: 7px;
+		--kit-icon-btn-color: #a1a1a1;
+		--kit-icon-btn-hover-bg: rgb(255 255 255 / 0.06);
+		--kit-icon-btn-hover-color: #fafafa;
+		--kit-handle: rgb(255 255 255 / 0.14);
+		--kit-handle-active: #8ecaff;
 	}
 
 	.dash :where(button, input, [role='tab']):focus-visible {
@@ -560,7 +850,8 @@
 			color 150ms var(--ease),
 			transform 150ms var(--ease);
 	}
-	.iconbtn:hover {
+	.iconbtn:hover,
+	.iconbtn[data-state='open'] {
 		background: rgb(255 255 255 / 0.06);
 		color: var(--fg);
 	}
@@ -610,18 +901,32 @@
 	}
 
 	/* ---------- sidebar ---------- */
-	.side {
+	/*
+	 * Every row shares one icon column (centred 28px from the edge) and one text column (48px),
+	 * so the tile, nav icons and avatar line up and stay put when the sidebar collapses to a rail.
+	 */
+	:global(.dash .side-col) {
 		position: sticky;
 		top: 0;
+		height: 100dvh;
+	}
+	.side {
 		display: flex;
 		flex-direction: column;
-		flex-shrink: 0;
-		width: 212px;
-		height: 100dvh;
+		height: 100%;
 		padding: 12px 10px 10px;
 		background: var(--surface);
 		border-right: 1px solid var(--line);
-		overflow-y: auto;
+		overflow: hidden auto;
+		white-space: nowrap;
+	}
+	.fades {
+		transition: opacity 150ms var(--ease);
+	}
+	.rail .fades,
+	.rail .nav-label {
+		opacity: 0;
+		pointer-events: none;
 	}
 
 	.ws {
@@ -629,6 +934,7 @@
 		align-items: center;
 		gap: 8px;
 		width: 100%;
+		min-width: 0;
 		padding: 6px;
 		border: 0;
 		border-radius: 8px;
@@ -636,7 +942,8 @@
 		text-align: left;
 		transition: background 150ms var(--ease);
 	}
-	.ws:hover {
+	.ws:hover,
+	.ws[data-state='open'] {
 		background: rgb(255 255 255 / 0.04);
 	}
 	.ws svg {
@@ -647,6 +954,7 @@
 	.tile {
 		display: grid;
 		place-items: center;
+		flex-shrink: 0;
 		width: 24px;
 		height: 24px;
 		border-radius: 7px;
@@ -658,13 +966,17 @@
 	}
 	.ws-name {
 		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		font-size: 13px;
 		font-weight: 500;
 		color: var(--fg);
 	}
 
 	.nav-label {
-		padding: 0 8px;
+		padding: 0 10px;
+		transition: opacity 150ms var(--ease);
 		margin: 14px 0 4px;
 		font-size: 11px;
 		font-weight: 500;
@@ -680,10 +992,10 @@
 	.nav-item {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 12px;
 		width: 100%;
 		height: 28px;
-		padding: 0 8px;
+		padding: 0 10px;
 		border: 0;
 		border-radius: 7px;
 		background: none;
@@ -695,6 +1007,8 @@
 			color 150ms var(--ease);
 	}
 	.nav-item svg {
+		width: 16px;
+		height: 16px;
 		color: var(--fg3);
 		transition: color 150ms var(--ease);
 	}
@@ -792,21 +1106,24 @@
 	.me {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 9px;
+		width: 100%;
 		margin-top: 8px;
-		padding: 7px 6px;
+		padding: 7px 6px 7px 7px;
 		border: 0;
 		border-radius: 8px;
 		background: none;
 		text-align: left;
 		transition: background 150ms var(--ease);
 	}
-	.me:hover {
+	.me:hover,
+	.me[data-state='open'] {
 		background: rgb(255 255 255 / 0.04);
 	}
 	.me-txt {
 		flex: 1;
 		min-width: 0;
+		overflow: hidden;
 	}
 	.me-name {
 		display: block;
@@ -970,6 +1287,41 @@
 	.bell {
 		position: relative;
 	}
+	.note-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 9999px;
+		background: transparent;
+		flex-shrink: 0;
+		transition: background 150ms var(--kit-ease-out);
+	}
+	.note-dot.unread {
+		background: var(--kit-accent);
+	}
+	.note-text {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	:global(.dash .rail-toggle) {
+		margin-left: -6px;
+	}
+	.toast {
+		position: fixed;
+		right: 20px;
+		bottom: 20px;
+		z-index: 60;
+		padding: 9px 14px;
+		border-radius: 10px;
+		background: var(--elev);
+		color: var(--fg);
+		font-size: 12.5px;
+		box-shadow:
+			0 0 0 1px var(--line2),
+			0 12px 32px -8px rgb(0 0 0 / 0.6);
+	}
 	.bell-dot {
 		position: absolute;
 		top: 6px;
@@ -1075,7 +1427,8 @@
 		font-size: 12px;
 		transition: box-shadow 150ms var(--ease);
 	}
-	.chip:hover {
+	.chip:hover,
+	.chip[data-state='open'] {
 		box-shadow:
 			inset 0 1px 0 rgb(255 255 255 / 0.06),
 			0 0 0 1px var(--line2);
@@ -1423,7 +1776,7 @@
 	}
 
 	/* ---------- table ---------- */
-	.table {
+	.pages-table {
 		margin-top: 10px;
 	}
 	.thead,
@@ -1520,10 +1873,21 @@
 		width: 13px;
 		height: 13px;
 	}
-	.trow:hover .rowbtn {
+	.trow:hover .rowbtn,
+	.rowbtn:focus-visible,
+	.rowbtn[data-state='open'] {
 		opacity: 1;
 	}
-	.rowbtn:hover {
+	.tempty {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 14px 4px;
+		color: var(--fg2);
+	}
+	.rowbtn:hover,
+	.rowbtn[data-state='open'] {
 		background: rgb(255 255 255 / 0.07);
 		color: var(--fg);
 	}
@@ -1626,7 +1990,8 @@
 		}
 	}
 	@media (max-width: 880px) {
-		.side {
+		:global(.dash .side-col),
+		:global(.dash .rail-toggle) {
 			display: none;
 		}
 		.search {

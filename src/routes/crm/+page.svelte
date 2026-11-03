@@ -1,7 +1,18 @@
 <script lang="ts">
 	import '@fontsource-variable/inter';
+	import CopyButton from '#lib/kit/CopyButton.svelte';
+	import FieldError from '#lib/kit/FieldError.svelte';
+	import IconButton from '#lib/kit/IconButton.svelte';
+	import KitRoot from '#lib/kit/KitRoot.svelte';
+	import MenuContent from '#lib/kit/MenuContent.svelte';
+	import MenuItem from '#lib/kit/MenuItem.svelte';
+	import MenuRadioItem from '#lib/kit/MenuRadioItem.svelte';
+	import Sidebar from '#lib/kit/Sidebar.svelte';
+	import Tip from '#lib/kit/Tip.svelte';
 	import { Dialog, DropdownMenu } from 'bits-ui';
-	import { tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
+	import { cubicOut } from 'svelte/easing';
+	import { fade, fly } from 'svelte/transition';
 	import FilterSelect from './FilterSelect.svelte';
 	import {
 		STAGE_META,
@@ -31,8 +42,12 @@
 	let navOpen = $state(false);
 	let sheetOpen = $state(false);
 	let newOpen = $state(false);
-	let toast = $state('');
+	let toast = $state<{ id: number; text: string; undo?: () => void } | null>(null);
 	let toastTimer: ReturnType<typeof setTimeout> | undefined;
+	let toastSeq = 0;
+	let railed = $state(false);
+	let workspace = $state('hale');
+	let submitted = $state(false);
 	let noteDraft = $state('');
 	let searchEl: HTMLInputElement | undefined = $state();
 	let navList: HTMLElement | undefined = $state();
@@ -44,7 +59,29 @@
 	let draftStage = $state<string>('lead');
 	let draftClose = $state('2026-11-28');
 	let creating = $state(false);
-	let undoDealId = $state<string | null>(null);
+
+	const WORKSPACES = [
+		{ id: 'hale', name: 'Hale Provisions', meta: '4 seats' },
+		{ id: 'pike', name: 'Pike Street Pantry', meta: '2 seats' }
+	];
+	const workspaceName = $derived(WORKSPACES.find((w) => w.id === workspace)?.name ?? WORKSPACES[0].name);
+
+	const draftErrors = $derived.by(() => {
+		if (!submitted) return { name: null, company: null, amount: null };
+		const amount = Number(draftAmount.replace(/[^0-9.]/g, ''));
+		return {
+			name: draftName.trim() ? null : 'Give the deal a name.',
+			company: draftCompany.trim() ? null : 'Add the company it’s with.',
+			amount: Number.isFinite(amount) && amount > 0 ? null : 'Enter an amount above $0.'
+		};
+	});
+	const draftValid = $derived(!draftErrors.name && !draftErrors.company && !draftErrors.amount);
+
+	const STAGE_ORDER: Stage[] = [...PIPELINE_STAGES, 'won', 'lost'];
+
+	function toStage(value: string): Stage | undefined {
+		return STAGE_ORDER.find((stage) => stage === value);
+	}
 
 	const NAV: { id: View; label: string }[] = [
 		{ id: 'pipeline', label: 'Pipeline' },
@@ -174,11 +211,13 @@
 		return () => window.removeEventListener('keydown', onKey);
 	});
 
-	function showToast(msg: string) {
-		toast = msg;
+	function showToast(text: string, undo?: () => void) {
 		clearTimeout(toastTimer);
-		toastTimer = setTimeout(() => (toast = ''), 3200);
+		toast = { id: toastSeq++, text, undo };
+		toastTimer = setTimeout(() => (toast = null), undo ? 5000 : 3200);
 	}
+
+	onDestroy(() => clearTimeout(toastTimer));
 
 	function setView(next: View) {
 		view = next;
@@ -193,8 +232,23 @@
 	}
 
 	function setStage(id: string, stage: Stage) {
+		const previous = deals.find((d) => d.id === id)?.stage;
+		if (!previous || previous === stage) return;
 		deals = deals.map((d) => (d.id === id ? { ...d, stage } : d));
-		showToast(`Moved to ${STAGE_META[stage].label}`);
+		showToast(`Moved to ${STAGE_META[stage].label}`, () => {
+			deals = deals.map((d) => (d.id === id ? { ...d, stage: previous } : d));
+		});
+	}
+
+	function deleteDeal(id: string) {
+		const index = deals.findIndex((d) => d.id === id);
+		if (index === -1) return;
+		const removed = deals[index];
+		deals = deals.filter((d) => d.id !== id);
+		showToast(`Deleted “${removed.name}”`, () => {
+			deals = [...deals.slice(0, index), removed, ...deals.slice(index)];
+			selectedId = removed.id;
+		});
 	}
 
 	function logNote() {
@@ -213,11 +267,15 @@
 
 	function createDeal(e: SubmitEvent) {
 		e.preventDefault();
+		submitted = true;
+		if (!draftValid) {
+			const firstInvalid = (e.currentTarget as HTMLFormElement).querySelector<HTMLInputElement>('[aria-invalid="true"]');
+			firstInvalid?.focus();
+			return;
+		}
 		const name = draftName.trim();
 		const company = draftCompany.trim();
-		if (!name || !company) return;
 		const amount = Number(draftAmount.replace(/[^0-9.]/g, ''));
-		if (!Number.isFinite(amount) || amount <= 0) return;
 		creating = true;
 		const id = `d-${Date.now()}`;
 		const deal: Deal = {
@@ -242,22 +300,21 @@
 			stageFilter = 'open';
 			newOpen = false;
 			creating = false;
-			undoDealId = id;
+			submitted = false;
 			draftName = '';
 			draftCompany = '';
 			draftAmount = '';
 			draftStage = 'lead';
-			showToast('Deal added');
+			showToast('Deal added', () => {
+				deals = deals.filter((d) => d.id !== id);
+			});
 		}, 420);
 	}
 
 	function undoToast() {
-		if (undoDealId) {
-			deals = deals.filter((d) => d.id !== undoDealId);
-			undoDealId = null;
-			showToast('Deal removed');
-		}
-		toast = '';
+		toast?.undo?.();
+		clearTimeout(toastTimer);
+		toast = null;
 	}
 
 	function onGridKey(e: KeyboardEvent) {
@@ -267,6 +324,16 @@
 		const next = e.key === 'ArrowDown' ? Math.min(filtered.length - 1, i + 1) : Math.max(0, i - 1);
 		const row = filtered[next];
 		if (row) selectedId = row.id;
+	}
+
+	async function copyEmail(email: string) {
+		try {
+			await navigator.clipboard.writeText(email);
+			showToast(`Copied ${email}`);
+		} catch (error) {
+			console.error('Clipboard write was refused', error);
+			showToast('Couldn’t copy. Check clipboard permissions.');
+		}
 	}
 
 	function clearSearch() {
@@ -280,393 +347,464 @@
 	<meta name="description" content="Folio CRM for Hale Provisions." />
 </svelte:head>
 
-<div class="folio">
-	<a class="skip" href="#main">Skip to deals</a>
+<KitRoot class="folio-kit">
+	<div class="folio">
+		<a class="skip" href="#main">Skip to deals</a>
 
-	<aside class="sidebar" class:open={navOpen} id="nav">
-		<div class="brand">
-			<span class="mark" aria-hidden="true">
-				<svg viewBox="0 0 24 24" fill="none">
-					<path d="M6 5.5h9.5A3.5 3.5 0 0 1 19 9v10.5H8.5A2.5 2.5 0 0 1 6 17V5.5Z" stroke="#10344f" stroke-width="1.7" />
-					<path d="M6 5.5A2.5 2.5 0 0 1 8.5 3H16" stroke="#10344f" stroke-width="1.7" stroke-linecap="round" />
-					<path d="M9 10h6M9 13.5h4" stroke="#10344f" stroke-width="1.7" stroke-linecap="round" />
-				</svg>
-			</span>
-			<div class="brand-copy">
-				<p class="product">Folio</p>
-				<p class="ws">Hale Provisions</p>
-			</div>
-		</div>
+		<Sidebar bind:collapsed={railed} defaultWidth={212} minWidth={184} maxWidth={320} collapsedWidth={56} class="side-col">
+			{#snippet children({ collapsed })}
+				<aside class="sidebar" class:open={navOpen} class:rail={collapsed} id="nav">
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger class="brand">
+							<span class="mark" aria-hidden="true">
+								<svg viewBox="0 0 24 24" fill="none">
+									<path d="M6 5.5h9.5A3.5 3.5 0 0 1 19 9v10.5H8.5A2.5 2.5 0 0 1 6 17V5.5Z" stroke="#10344f" stroke-width="1.7" />
+									<path d="M6 5.5A2.5 2.5 0 0 1 8.5 3H16" stroke="#10344f" stroke-width="1.7" stroke-linecap="round" />
+									<path d="M9 10h6M9 13.5h4" stroke="#10344f" stroke-width="1.7" stroke-linecap="round" />
+								</svg>
+							</span>
+							<span class="brand-copy fades">
+								<span class="product">Folio</span>
+								<span class="ws">{workspaceName}</span>
+							</span>
+							<svg class="brand-chev fades" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 15 5 5 5-5M7 9l5-5 5 5" /></svg>
+						</DropdownMenu.Trigger>
+						<MenuContent minWidth={220}>
+							<DropdownMenu.Group>
+								<DropdownMenu.GroupHeading class="kit-menu-label">Workspaces</DropdownMenu.GroupHeading>
+								<DropdownMenu.RadioGroup bind:value={workspace}>
+									{#each WORKSPACES as w (w.id)}
+										<MenuRadioItem value={w.id} meta={w.meta}>{w.name}</MenuRadioItem>
+									{/each}
+								</DropdownMenu.RadioGroup>
+							</DropdownMenu.Group>
+							<DropdownMenu.Separator class="kit-menu-sep" />
+							<MenuItem onSelect={() => showToast('Invite link copied')}>Invite teammates</MenuItem>
+							<MenuItem onSelect={() => showToast('Settings are read-only in this demo')}>Workspace settings</MenuItem>
+						</MenuContent>
+					</DropdownMenu.Root>
 
-		<nav class="nav" bind:this={navList} aria-label="Workspace">
-			<span class="pill" style="transform: translateY({pillY}px)" aria-hidden="true"></span>
-			{#each NAV as item (item.id)}
-				<button
-					type="button"
-					class="nav-btn"
-					class:on={view === item.id}
-					data-view={item.id}
-					aria-current={view === item.id ? 'page' : undefined}
-					onclick={() => setView(item.id)}
-				>
-					{#if item.id === 'pipeline'}
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-							<rect x="3.5" y="4.5" width="5" height="15" rx="1.4" />
-							<rect x="9.5" y="8.5" width="5" height="11" rx="1.4" />
-							<rect x="15.5" y="6.5" width="5" height="13" rx="1.4" />
-						</svg>
-					{:else if item.id === 'deals'}
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-							<path d="M8 6h11M8 12h11M8 18h11" />
-							<circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none" />
-							<circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none" />
-							<circle cx="4.5" cy="18" r="1" fill="currentColor" stroke="none" />
-						</svg>
-					{:else if item.id === 'people'}
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-							<circle cx="12" cy="8" r="3" />
-							<path d="M5.5 19a6.5 6.5 0 0 1 13 0" />
-						</svg>
-					{:else}
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-							<path d="M4.5 19.5V9.2L12 4.5l7.5 4.7v10.3" />
-							<path d="M9.5 19.5v-6h5v6" />
-						</svg>
-					{/if}
-					<span>{item.label}</span>
-					{#if item.id === 'deals'}
-						<span class="count">{openDeals.length}</span>
-					{/if}
+					<nav class="nav" bind:this={navList} aria-label="Workspace">
+						<span class="pill" style="transform: translateY({pillY}px)" aria-hidden="true"></span>
+						{#each NAV as item (item.id)}
+							<Tip label={item.label} side="right" disabled={!collapsed}>
+								{#snippet trigger({ props })}
+									<button
+										{...props}
+										type="button"
+										class="nav-btn"
+										class:on={view === item.id}
+										data-view={item.id}
+										aria-current={view === item.id ? 'page' : undefined}
+										aria-label={collapsed ? item.label : undefined}
+										onclick={() => setView(item.id)}
+									>
+										{#if item.id === 'pipeline'}
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+												<rect x="3.5" y="4.5" width="5" height="15" rx="1.4" />
+												<rect x="9.5" y="8.5" width="5" height="11" rx="1.4" />
+												<rect x="15.5" y="6.5" width="5" height="13" rx="1.4" />
+											</svg>
+										{:else if item.id === 'deals'}
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+												<path d="M8 6h11M8 12h11M8 18h11" />
+												<circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none" />
+												<circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none" />
+												<circle cx="4.5" cy="18" r="1" fill="currentColor" stroke="none" />
+											</svg>
+										{:else if item.id === 'people'}
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+												<circle cx="12" cy="8" r="3" />
+												<path d="M5.5 19a6.5 6.5 0 0 1 13 0" />
+											</svg>
+										{:else}
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+												<path d="M4.5 19.5V9.2L12 4.5l7.5 4.7v10.3" />
+												<path d="M9.5 19.5v-6h5v6" />
+											</svg>
+										{/if}
+										<span class="fades">{item.label}</span>
+										{#if item.id === 'deals'}
+											<span class="count fades">{openDeals.length}</span>
+										{/if}
+									</button>
+								{/snippet}
+							</Tip>
+						{/each}
+					</nav>
+
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger class="who">
+							<span class="ava">MC</span>
+							<span class="who-copy fades">
+								<span class="who-name">Maya Chen</span>
+								<span class="who-mail">maya@haleprovisions.com</span>
+							</span>
+						</DropdownMenu.Trigger>
+						<MenuContent side="top" minWidth={220}>
+							<MenuItem onSelect={() => showToast('Profile is read-only in this demo')}>Profile</MenuItem>
+							<MenuItem onSelect={() => (railed = !railed)} keys={['⌘', 'B']}>{railed ? 'Expand sidebar' : 'Collapse sidebar'}</MenuItem>
+							<DropdownMenu.Separator class="kit-menu-sep" />
+							<MenuItem onSelect={() => showToast('Signed out (not really, it’s a demo)')}>Sign out</MenuItem>
+						</MenuContent>
+					</DropdownMenu.Root>
+				</aside>
+			{/snippet}
+		</Sidebar>
+
+		{#if navOpen}
+			<button type="button" class="scrim" aria-label="Close menu" onclick={() => (navOpen = false)}></button>
+		{/if}
+
+		<div class="desk">
+			<header class="top">
+				<button type="button" class="icon-btn menu-btn" aria-label="Open menu" aria-controls="nav" aria-expanded={navOpen} onclick={() => (navOpen = true)}>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+						<path d="M5 7h14M5 12h14M5 17h14" />
+					</svg>
 				</button>
-			{/each}
-		</nav>
+				<IconButton label={railed ? 'Expand sidebar' : 'Collapse sidebar'} keys={['⌘', 'B']} side="bottom" class="rail-toggle" onclick={() => (railed = !railed)}>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<rect x="3" y="3" width="18" height="18" rx="3" />
+						<path d="M9 3v18" />
+					</svg>
+				</IconButton>
+				<div class="title-block">
+					<h1 id="main">{titles[view]}</h1>
+					<p class="lede">
+						{kpis.openCount} open · {money(kpis.openSum)}
+					</p>
+				</div>
+				<label class="search">
+					<span class="sr">Search</span>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+						<circle cx="11" cy="11" r="6.5" />
+						<path d="m16 16 4 4" stroke-linecap="round" />
+					</svg>
+					<input
+						bind:this={searchEl}
+						bind:value={query}
+						type="search"
+						placeholder={view === 'people' ? 'Find a person' : view === 'companies' ? 'Find a company' : 'Find a deal'}
+						autocomplete="off"
+					/>
+					<kbd>/</kbd>
+				</label>
+				<button type="button" class="btn btn-primary new-deal" aria-label="New deal" onclick={() => (newOpen = true)}>
+					<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+						<path d="M8 3.2v9.6M3.2 8h9.6" />
+					</svg>
+					<span class="new-label">New deal</span>
+				</button>
+			</header>
 
-		<div class="who">
-			<span class="ava">MC</span>
-			<div>
-				<p class="who-name">Maya Chen</p>
-				<p class="who-mail">maya@haleprovisions.com</p>
-			</div>
-		</div>
-	</aside>
+			<section class="kpis" aria-label="Pipeline snapshot">
+				<div class="kpi">
+					<p class="kpi-l">Open</p>
+					<p class="kpi-n">{money(kpis.openSum)}</p>
+					<p class="kpi-m">{kpis.openCount} deals</p>
+				</div>
+				<div class="kpi">
+					<p class="kpi-l">Weighted</p>
+					<p class="kpi-n">{money(kpis.weighted)}</p>
+					<p class="kpi-m">by stage chance</p>
+				</div>
+				<div class="kpi">
+					<p class="kpi-l">Closing Nov</p>
+					<p class="kpi-n">{kpis.closingNov}</p>
+					<p class="kpi-m">this month</p>
+				</div>
+				<div class="kpi">
+					<p class="kpi-l">Win rate</p>
+					<p class="kpi-n">{kpis.rate}%</p>
+					<p class="kpi-m">{kpis.won} won this season</p>
+				</div>
+			</section>
 
-	{#if navOpen}
-		<button type="button" class="scrim" aria-label="Close menu" onclick={() => (navOpen = false)}></button>
-	{/if}
+			{#if view === 'deals'}
+				<div class="tools">
+					<FilterSelect bind:value={stageFilter} options={STAGE_OPTIONS} label="Stage" />
+					<FilterSelect bind:value={ownerFilter} options={OWNER_OPTIONS} label="Owner" />
+					<FilterSelect bind:value={rangeFilter} options={RANGE_OPTIONS} label="Close" />
+					<p class="shown" role="status">{filtered.length} shown</p>
+				</div>
 
-	<div class="desk">
-		<header class="top">
-			<button type="button" class="icon-btn menu-btn" aria-label="Open menu" aria-controls="nav" aria-expanded={navOpen} onclick={() => (navOpen = true)}>
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-					<path d="M5 7h14M5 12h14M5 17h14" />
-				</svg>
-			</button>
-			<div class="title-block">
-				<h1 id="main">{titles[view]}</h1>
-				<p class="lede">
-					{kpis.openCount} open · {money(kpis.openSum)}
-				</p>
-			</div>
-			<label class="search">
-				<span class="sr">Search</span>
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-					<circle cx="11" cy="11" r="6.5" />
-					<path d="m16 16 4 4" stroke-linecap="round" />
-				</svg>
-				<input
-					bind:this={searchEl}
-					bind:value={query}
-					type="search"
-					placeholder={view === 'people' ? 'Find a person' : view === 'companies' ? 'Find a company' : 'Find a deal'}
-					autocomplete="off"
-				/>
-				<kbd>/</kbd>
-			</label>
-			<button type="button" class="btn btn-primary new-deal" aria-label="New deal" onclick={() => (newOpen = true)}>
-				<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
-					<path d="M8 3.2v9.6M3.2 8h9.6" />
-				</svg>
-				<span class="new-label">New deal</span>
-			</button>
-		</header>
+				<div class="split">
+					<div class="table-wrap">
+						{#if filtered.length === 0}
+							<div class="empty">
+								<p>No deals match{query ? ` “${query}”` : ''}.</p>
+								<button type="button" class="btn btn-secondary" onclick={clearSearch}>Clear search</button>
+							</div>
+						{:else}
+							<table class="ledger deals-ledger">
+								<colgroup>
+									<col class="c-deal" />
+									<col class="c-stage" />
+									<col class="c-owner" />
+									<col class="c-close" />
+									<col class="c-amount" />
+									<col class="c-act" />
+								</colgroup>
+								<thead>
+									<tr>
+										<th>Deal</th>
+										<th>Stage</th>
+										<th>Owner</th>
+										<th>Close</th>
+										<th class="num">Amount</th>
+										<th><span class="sr">Actions</span></th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each filtered as d (d.id)}
+										<tr
+											class:sel={d.id === activeId}
+											aria-selected={d.id === activeId}
+											onclick={() => pickDeal(d.id)}
+										>
+											<td>
+												<p class="deal-name" title={d.name}>{d.name}</p>
+												<p class="deal-sub">{d.company} · {d.contact}</p>
+											</td>
+											<td><span class="tag {STAGE_META[d.stage].tone}">{STAGE_META[d.stage].label}</span></td>
+											<td>
+												<span class="owner">
+													<span class="dot">{d.ownerInitials}</span>
+													{d.owner.split(' ')[0]}
+												</span>
+											</td>
+											<td class="tab">{shortDate(d.close)}</td>
+											<td class="num tab">{money(d.amount)}</td>
+											<td class="act">
+												<DropdownMenu.Root>
+													<DropdownMenu.Trigger class="icon-btn row-act" aria-label="Actions for {d.name}" onclick={(e) => e.stopPropagation()}>
+														<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+															<circle cx="3.5" cy="8" r="1.15" />
+															<circle cx="8" cy="8" r="1.15" />
+															<circle cx="12.5" cy="8" r="1.15" />
+														</svg>
+													</DropdownMenu.Trigger>
+													<MenuContent align="end" sideOffset={4} minWidth={184}>
+														<MenuItem onSelect={() => pickDeal(d.id)} keys={['↵']}>Open</MenuItem>
+														<MenuItem onSelect={() => copyEmail(d.email)}>Copy email</MenuItem>
+														<DropdownMenu.Separator class="kit-menu-sep" />
+														<DropdownMenu.Group>
+															<DropdownMenu.GroupHeading class="kit-menu-label">Stage</DropdownMenu.GroupHeading>
+															<DropdownMenu.RadioGroup value={d.stage} onValueChange={(v) => { const stage = toStage(v); if (stage) setStage(d.id, stage); }}>
+																{#each STAGE_ORDER as st (st)}
+																	<MenuRadioItem value={st}>{STAGE_META[st].label}</MenuRadioItem>
+																{/each}
+															</DropdownMenu.RadioGroup>
+														</DropdownMenu.Group>
+														<DropdownMenu.Separator class="kit-menu-sep" />
+														<MenuItem tone="danger" onSelect={() => deleteDeal(d.id)}>Delete deal</MenuItem>
+													</MenuContent>
+												</DropdownMenu.Root>
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						{/if}
+					</div>
 
-		<section class="kpis" aria-label="Pipeline snapshot">
-			<div class="kpi">
-				<p class="kpi-l">Open</p>
-				<p class="kpi-n">{money(kpis.openSum)}</p>
-				<p class="kpi-m">{kpis.openCount} deals</p>
-			</div>
-			<div class="kpi">
-				<p class="kpi-l">Weighted</p>
-				<p class="kpi-n">{money(kpis.weighted)}</p>
-				<p class="kpi-m">by stage chance</p>
-			</div>
-			<div class="kpi">
-				<p class="kpi-l">Closing Nov</p>
-				<p class="kpi-n">{kpis.closingNov}</p>
-				<p class="kpi-m">this month</p>
-			</div>
-			<div class="kpi">
-				<p class="kpi-l">Win rate</p>
-				<p class="kpi-n">{kpis.rate}%</p>
-				<p class="kpi-m">{kpis.won} won this season</p>
-			</div>
-		</section>
-
-		{#if view === 'deals'}
-			<div class="tools">
-				<FilterSelect bind:value={stageFilter} options={STAGE_OPTIONS} label="Stage" />
-				<FilterSelect bind:value={ownerFilter} options={OWNER_OPTIONS} label="Owner" />
-				<FilterSelect bind:value={rangeFilter} options={RANGE_OPTIONS} label="Close" />
-				<p class="shown" role="status">{filtered.length} shown</p>
-			</div>
-
-			<div class="split">
-				<div class="table-wrap">
-					{#if filtered.length === 0}
+					<aside class="inspector" class:sheet={sheetOpen} aria-label="Deal details">
+						{#if selected}
+							<div class="insp-head">
+								<IconButton label="Close details" class="sheet-close" onclick={() => (sheetOpen = false)}>
+									<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+										<path d="m4 4 8 8M12 4 4 12" />
+									</svg>
+								</IconButton>
+								<h2>{selected.name}</h2>
+								<p class="insp-co">{selected.company}</p>
+								<p class="insp-amt tab">{money(selected.amount)}</p>
+								<span class="tag {STAGE_META[selected.stage].tone}">{STAGE_META[selected.stage].label}</span>
+							</div>
+							<dl class="meta">
+								<div><dt>Contact</dt><dd>{selected.contact}</dd></div>
+								<div>
+									<dt>Email</dt>
+									<dd class="email-dd">
+										<a href="mailto:{selected.email}">{selected.email}</a>
+										<CopyButton text={selected.email} label="Copy email" class="copy-mini" />
+									</dd>
+								</div>
+								<div><dt>Owner</dt><dd>{selected.owner}</dd></div>
+								<div><dt>Close</dt><dd>{shortDate(selected.close)}</dd></div>
+							</dl>
+							<div class="next">
+								<p class="sec">Next step</p>
+								<p>{selected.next}</p>
+							</div>
+							<form class="log" onsubmit={(e) => { e.preventDefault(); logNote(); }}>
+								<label for="note">Log a note</label>
+								<div class="log-row">
+									<input id="note" bind:value={noteDraft} placeholder="Called Elena, sent the SKU list…" />
+									<button type="submit" class="btn btn-primary" disabled={noteDraft.trim().length === 0}>Log</button>
+								</div>
+							</form>
+							<div class="activity">
+								<p class="sec">Activity</p>
+								{#if selected.notes.length === 0}
+									<p class="quiet">No activity yet. Log a note to start a trail.</p>
+								{:else}
+									<ol>
+										{#each selected.notes as n (n.id)}
+											<li>
+												<p class="act-who">{n.who} · {noteWhen(n.at)}</p>
+												<p>{n.text}</p>
+											</li>
+										{/each}
+									</ol>
+								{/if}
+							</div>
+						{:else}
+							<div class="empty insp-empty">
+								<p>Select a deal to see the trail.</p>
+							</div>
+						{/if}
+					</aside>
+				</div>
+			{:else if view === 'pipeline'}
+				<div class="board" aria-label="Open pipeline">
+					{#each columnDeals as col (col.stage)}
+						<section class="col">
+							<header>
+								<span class="tag {STAGE_META[col.stage].tone}">{STAGE_META[col.stage].label}</span>
+								<span class="col-n">{col.items.length}</span>
+								<span class="col-sum tab">{money(col.items.reduce((s, d) => s + d.amount, 0))}</span>
+							</header>
+							<ul>
+								{#each col.items as d (d.id)}
+									<li>
+										<button type="button" class="card" class:sel={d.id === activeId} onclick={() => pickDeal(d.id)}>
+											<p class="deal-name">{d.name}</p>
+											<p class="deal-sub">{d.company}</p>
+											<div class="card-foot">
+												<span class="owner"><span class="dot">{d.ownerInitials}</span>{d.owner.split(' ')[0]}</span>
+												<span class="tab">{money(d.amount)}</span>
+											</div>
+										</button>
+									</li>
+								{/each}
+							</ul>
+						</section>
+					{/each}
+				</div>
+			{:else if view === 'people'}
+				<div class="table-wrap pad">
+					{#if people.length === 0}
 						<div class="empty">
-							<p>No deals match{query ? ` “${query}”` : ''}.</p>
+							<p>No people match “{query}”.</p>
 							<button type="button" class="btn btn-secondary" onclick={clearSearch}>Clear search</button>
 						</div>
 					{:else}
-						<table class="ledger deals-ledger">
-							<colgroup>
-								<col class="c-deal" />
-								<col class="c-stage" />
-								<col class="c-owner" />
-								<col class="c-close" />
-								<col class="c-amount" />
-								<col class="c-act" />
-							</colgroup>
+						<table class="ledger people-ledger">
 							<thead>
 								<tr>
-									<th>Deal</th>
-									<th>Stage</th>
-									<th>Owner</th>
-									<th>Close</th>
-									<th class="num">Amount</th>
-									<th><span class="sr">Actions</span></th>
+									<th>Person</th>
+									<th>Company</th>
+									<th>Email</th>
+									<th class="num">Open</th>
+									<th class="num">Pipeline</th>
 								</tr>
 							</thead>
 							<tbody>
-								{#each filtered as d (d.id)}
-									<tr
-										class:sel={d.id === activeId}
-										aria-selected={d.id === activeId}
-										onclick={() => pickDeal(d.id)}
-									>
+								{#each people as p (p.email)}
+									<tr>
 										<td>
-											<p class="deal-name" title={d.name}>{d.name}</p>
-											<p class="deal-sub">{d.company} · {d.contact}</p>
+											<p class="deal-name">{p.name}</p>
+											<p class="deal-sub">{p.phone}</p>
 										</td>
-										<td><span class="tag {STAGE_META[d.stage].tone}">{STAGE_META[d.stage].label}</span></td>
-										<td>
-											<span class="owner">
-												<span class="dot">{d.ownerInitials}</span>
-												{d.owner.split(' ')[0]}
-											</span>
-										</td>
-										<td class="tab">{shortDate(d.close)}</td>
-										<td class="num tab">{money(d.amount)}</td>
-										<td class="act">
-											<DropdownMenu.Root>
-												<DropdownMenu.Trigger class="icon-btn row-act" aria-label="Actions for {d.name}" onclick={(e) => e.stopPropagation()}>
-													<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-														<circle cx="3.5" cy="8" r="1.15" />
-														<circle cx="8" cy="8" r="1.15" />
-														<circle cx="12.5" cy="8" r="1.15" />
-													</svg>
-												</DropdownMenu.Trigger>
-												<DropdownMenu.Portal>
-													<DropdownMenu.Content class="folio-pop folio-menu" side="bottom" align="end" sideOffset={4}>
-														<DropdownMenu.Item class="folio-item" onSelect={() => pickDeal(d.id)}>Open</DropdownMenu.Item>
-														<DropdownMenu.Item class="folio-item" onSelect={() => setStage(d.id, 'won')}>Mark won</DropdownMenu.Item>
-														<DropdownMenu.Item class="folio-item" onSelect={() => setStage(d.id, 'lost')}>Mark lost</DropdownMenu.Item>
-													</DropdownMenu.Content>
-												</DropdownMenu.Portal>
-											</DropdownMenu.Root>
-										</td>
+										<td>{p.company}</td>
+										<td><a href="mailto:{p.email}">{p.email}</a></td>
+										<td class="num tab">{p.open}</td>
+										<td class="num tab">{money(p.value)}</td>
 									</tr>
 								{/each}
 							</tbody>
 						</table>
 					{/if}
 				</div>
-
-				<aside class="inspector" class:sheet={sheetOpen} aria-label="Deal details">
-					{#if selected}
-						<div class="insp-head">
-							<button type="button" class="icon-btn sheet-close" aria-label="Close details" onclick={() => (sheetOpen = false)}>
-								<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
-									<path d="m4 4 8 8M12 4 4 12" />
-								</svg>
-							</button>
-							<h2>{selected.name}</h2>
-							<p class="insp-co">{selected.company}</p>
-							<p class="insp-amt tab">{money(selected.amount)}</p>
-							<span class="tag {STAGE_META[selected.stage].tone}">{STAGE_META[selected.stage].label}</span>
-						</div>
-						<dl class="meta">
-							<div><dt>Contact</dt><dd>{selected.contact}</dd></div>
-							<div><dt>Email</dt><dd><a href="mailto:{selected.email}">{selected.email}</a></dd></div>
-							<div><dt>Owner</dt><dd>{selected.owner}</dd></div>
-							<div><dt>Close</dt><dd>{shortDate(selected.close)}</dd></div>
-						</dl>
-						<div class="next">
-							<p class="sec">Next step</p>
-							<p>{selected.next}</p>
-						</div>
-						<form class="log" onsubmit={(e) => { e.preventDefault(); logNote(); }}>
-							<label for="note">Log a note</label>
-							<div class="log-row">
-								<input id="note" bind:value={noteDraft} placeholder="Called Elena, sent the SKU list…" />
-								<button type="submit" class="btn btn-primary" disabled={noteDraft.trim().length === 0}>Log</button>
-							</div>
-						</form>
-						<div class="activity">
-							<p class="sec">Activity</p>
-							{#if selected.notes.length === 0}
-								<p class="quiet">No activity yet. Log a note to start a trail.</p>
-							{:else}
-								<ol>
-									{#each selected.notes as n (n.id)}
-										<li>
-											<p class="act-who">{n.who} · {noteWhen(n.at)}</p>
-											<p>{n.text}</p>
-										</li>
-									{/each}
-								</ol>
-							{/if}
+			{:else}
+				<div class="table-wrap pad">
+					{#if companies.length === 0}
+						<div class="empty">
+							<p>No companies match “{query}”.</p>
+							<button type="button" class="btn btn-secondary" onclick={clearSearch}>Clear search</button>
 						</div>
 					{:else}
-						<div class="empty insp-empty">
-							<p>Select a deal to see the trail.</p>
-						</div>
+						<table class="ledger companies-ledger">
+							<thead>
+								<tr>
+									<th>Company</th>
+									<th>Contact</th>
+									<th class="num">Open</th>
+									<th class="num">Pipeline</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each companies as c (c.name)}
+									<tr>
+										<td class="deal-name">{c.name}</td>
+										<td>{c.contact}</td>
+										<td class="num tab">{c.open}</td>
+										<td class="num tab">{money(c.value)}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
 					{/if}
-				</aside>
-			</div>
-		{:else if view === 'pipeline'}
-			<div class="board" aria-label="Open pipeline">
-				{#each columnDeals as col (col.stage)}
-					<section class="col">
-						<header>
-							<span class="tag {STAGE_META[col.stage].tone}">{STAGE_META[col.stage].label}</span>
-							<span class="col-n">{col.items.length}</span>
-							<span class="col-sum tab">{money(col.items.reduce((s, d) => s + d.amount, 0))}</span>
-						</header>
-						<ul>
-							{#each col.items as d (d.id)}
-								<li>
-									<button type="button" class="card" class:sel={d.id === activeId} onclick={() => pickDeal(d.id)}>
-										<p class="deal-name">{d.name}</p>
-										<p class="deal-sub">{d.company}</p>
-										<div class="card-foot">
-											<span class="owner"><span class="dot">{d.ownerInitials}</span>{d.owner.split(' ')[0]}</span>
-											<span class="tab">{money(d.amount)}</span>
-										</div>
-									</button>
-								</li>
-							{/each}
-						</ul>
-					</section>
-				{/each}
-			</div>
-		{:else if view === 'people'}
-			<div class="table-wrap pad">
-				{#if people.length === 0}
-					<div class="empty">
-						<p>No people match “{query}”.</p>
-						<button type="button" class="btn btn-secondary" onclick={clearSearch}>Clear search</button>
-					</div>
-				{:else}
-					<table class="ledger people-ledger">
-						<thead>
-							<tr>
-								<th>Person</th>
-								<th>Company</th>
-								<th>Email</th>
-								<th class="num">Open</th>
-								<th class="num">Pipeline</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each people as p (p.email)}
-								<tr>
-									<td>
-										<p class="deal-name">{p.name}</p>
-										<p class="deal-sub">{p.phone}</p>
-									</td>
-									<td>{p.company}</td>
-									<td><a href="mailto:{p.email}">{p.email}</a></td>
-									<td class="num tab">{p.open}</td>
-									<td class="num tab">{money(p.value)}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				{/if}
-			</div>
-		{:else}
-			<div class="table-wrap pad">
-				{#if companies.length === 0}
-					<div class="empty">
-						<p>No companies match “{query}”.</p>
-						<button type="button" class="btn btn-secondary" onclick={clearSearch}>Clear search</button>
-					</div>
-				{:else}
-					<table class="ledger companies-ledger">
-						<thead>
-							<tr>
-								<th>Company</th>
-								<th>Contact</th>
-								<th class="num">Open</th>
-								<th class="num">Pipeline</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each companies as c (c.name)}
-								<tr>
-									<td class="deal-name">{c.name}</td>
-									<td>{c.contact}</td>
-									<td class="num tab">{c.open}</td>
-									<td class="num tab">{money(c.value)}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				{/if}
-			</div>
+				</div>
+			{/if}
+		</div>
+
+		<nav class="dock" aria-label="Primary">
+			{#each NAV as item (item.id)}
+				<button type="button" class="dock-btn" class:on={view === item.id} onclick={() => setView(item.id)}>
+					{item.label}
+				</button>
+			{/each}
+		</nav>
+
+		{#if toast}
+			{#key toast.id}
+				<div class="toast" role="status" in:fly={{ y: 12, duration: 240, easing: cubicOut }} out:fade={{ duration: 140 }}>
+					{toast.text}
+					{#if toast.undo}
+						<button type="button" class="undo" onclick={undoToast}>Undo</button>
+					{/if}
+				</div>
+			{/key}
 		{/if}
 	</div>
 
-	<nav class="dock" aria-label="Primary">
-		{#each NAV as item (item.id)}
-			<button type="button" class="dock-btn" class:on={view === item.id} onclick={() => setView(item.id)}>
-				{item.label}
-			</button>
-		{/each}
-	</nav>
-</div>
+</KitRoot>
 
-<Dialog.Root bind:open={newOpen}>
+<Dialog.Root bind:open={newOpen} onOpenChange={(open) => { if (!open) submitted = false; }}>
 	<Dialog.Portal>
 		<Dialog.Overlay class="folio-overlay" />
 		<Dialog.Content class="folio-dialog">
 			<Dialog.Title>New deal</Dialog.Title>
-			<Dialog.Description>Add a deal to the Hale Provisions book.</Dialog.Description>
-			<form class="dlg-form" onsubmit={createDeal}>
+			<Dialog.Description class="dlg-desc">Add a deal to the {workspaceName} book.</Dialog.Description>
+			<form class="dlg-form" onsubmit={createDeal} novalidate>
 				<div class="field">
 					<label for="dn">Deal name</label>
-					<input id="dn" bind:value={draftName} placeholder="Winter pantry restock" required />
+					<input id="dn" bind:value={draftName} placeholder="Winter pantry restock" aria-invalid={!!draftErrors.name} aria-describedby="dn-err" />
+					<FieldError id="dn-err" message={draftErrors.name} />
 				</div>
 				<div class="field">
 					<label for="dc">Company</label>
-					<input id="dc" bind:value={draftCompany} placeholder="Canlis" required />
+					<input id="dc" bind:value={draftCompany} placeholder="Canlis" aria-invalid={!!draftErrors.company} aria-describedby="dc-err" />
+					<FieldError id="dc-err" message={draftErrors.company} />
 				</div>
 				<div class="dlg-row">
 					<div class="field">
 						<label for="da">Amount</label>
-						<input id="da" bind:value={draftAmount} inputmode="decimal" placeholder="18400" required />
+						<input id="da" bind:value={draftAmount} inputmode="decimal" placeholder="18400" aria-invalid={!!draftErrors.amount} aria-describedby="da-err" />
+						<FieldError id="da-err" message={draftErrors.amount} />
 					</div>
 					<div class="field">
 						<label for="dd">Close date</label>
@@ -696,15 +834,6 @@
 		</Dialog.Content>
 	</Dialog.Portal>
 </Dialog.Root>
-
-{#if toast}
-	<div class="toast" role="status">
-		{toast}
-		{#if undoDealId && toast === 'Deal added'}
-			<button type="button" class="undo" onclick={undoToast}>Undo</button>
-		{/if}
-	</div>
-{/if}
 
 <style>
 	.folio,
@@ -737,12 +866,31 @@
 		--shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 0 0 1px var(--line);
 		--shadow-pop: 0 0 0 1px rgb(0 0 0 / 0.06), 0 8px 24px -4px rgb(0 0 0 / 0.10), 0 2px 6px rgb(0 0 0 / 0.04);
 		--shadow-focus: 0 0 0 3px color-mix(in oklab, var(--accent), transparent 55%);
+		--kit-danger: var(--no);
 		--font: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
 		font-family: var(--font);
 		color: var(--ink);
 		-webkit-font-smoothing: antialiased;
 		text-rendering: optimizeLegibility;
 		font-feature-settings: 'cv11', 'ss01';
+	}
+
+	/* KitRoot wrapper: no box of its own, it only themes the portalled menus and tooltips */
+	:global(.folio-kit) {
+		display: contents;
+		font-family: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+		--kit-pop-radius: 12px;
+		--kit-item-radius: 8px;
+		--kit-item-height: 28px;
+		--kit-item-hover: #e4eef6;
+		--kit-accent: #10344f;
+		--kit-success: #15803d;
+		--kit-danger: #b91c1c;
+		--kit-danger-bg: #fef2f2;
+		--kit-icon-btn-radius: 8px;
+		--kit-icon-btn-color: #737373;
+		--kit-icon-btn-hover-bg: rgb(0 0 0 / 0.05);
+		--kit-handle-active: #6aa8d0;
 	}
 
 	.folio {
@@ -752,8 +900,13 @@
 		font-size: 13px;
 		line-height: 1.35;
 		display: grid;
-		grid-template-columns: 196px 1fr;
+		grid-template-columns: auto 1fr;
 		font-family: var(--font);
+	}
+	:global(.folio .side-col) {
+		position: sticky;
+		top: 0;
+		height: 100dvh;
 	}
 
 	.folio :focus-visible {
@@ -789,19 +942,54 @@
 	}
 
 	/* Sidebar */
+	/*
+	 * Every row shares one icon column (centred 28px from the edge) and one text column (48px),
+	 * so the mark, nav icons and avatar line up and stay put when the sidebar collapses to a rail.
+	 */
 	.sidebar {
 		display: flex;
 		flex-direction: column;
 		padding: 12px 10px 12px;
 		gap: 16px;
-		min-height: 100dvh;
+		height: 100%;
 		background: var(--sidebar);
 	}
-	.brand {
+	:global(.folio .brand) {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 2px 6px;
+		gap: 6px;
+		width: 100%;
+		height: 36px;
+		padding: 0 4px;
+		border: 0;
+		border-radius: 10px;
+		background: transparent;
+		color: var(--ink);
+		text-align: start;
+		transition: background 150ms var(--ease-out);
+	}
+	:global(.folio .brand:hover),
+	:global(.folio .brand[data-state='open']) {
+		background: rgb(0 0 0 / 0.04);
+	}
+	.brand-copy {
+		display: block;
+		min-width: 0;
+		flex: 1;
+	}
+	.brand-chev {
+		width: 14px;
+		height: 14px;
+		margin-inline-end: 4px;
+		color: var(--ink-3);
+		flex-shrink: 0;
+	}
+	.fades {
+		transition: opacity 150ms var(--ease-out);
+	}
+	.rail .fades {
+		opacity: 0;
+		pointer-events: none;
 	}
 	.mark {
 		width: 28px;
@@ -818,12 +1006,17 @@
 		height: 16px;
 	}
 	.product {
+		display: block;
 		font-size: 14px;
 		font-weight: 500;
 		letter-spacing: -0.01em;
 		line-height: 1.2;
 	}
 	.ws {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-size: 12px;
 		color: var(--ink-2);
 	}
@@ -852,12 +1045,14 @@
 		height: 28px;
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 0 8px;
+		gap: 12px;
+		padding: 0 10px;
 		border: 0;
 		background: transparent;
 		color: var(--ink-2);
+		white-space: nowrap;
 		font: 500 13px/1 var(--font);
+		transition: color 150ms var(--ease-out);
 		border-radius: 8px;
 		width: 100%;
 		text-align: start;
@@ -880,14 +1075,24 @@
 		color: var(--accent-ink);
 	}
 
-	.who {
+	:global(.folio .who) {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 8px;
+		width: 100%;
+		padding: 6px;
+		border: 0;
 		border-radius: 10px;
 		background: var(--sheet);
 		box-shadow: var(--shadow-card);
+		color: var(--ink);
+		text-align: start;
+		white-space: nowrap;
+		transition: box-shadow 150ms var(--ease-out);
+	}
+	:global(.folio .who:hover),
+	:global(.folio .who[data-state='open']) {
+		box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 0 0 1px #dcdcdc;
 	}
 	.ava,
 	.dot {
@@ -902,14 +1107,17 @@
 		color: var(--accent-ink);
 		flex-shrink: 0;
 	}
+	.who-copy {
+		display: block;
+		min-width: 0;
+	}
 	.who-name {
+		display: block;
 		font-weight: 500;
 		font-size: 13px;
 	}
-	.who > div {
-		min-width: 0;
-	}
 	.who-mail {
+		display: block;
 		font-size: 12px;
 		color: var(--ink-2);
 		overflow: hidden;
@@ -1367,9 +1575,27 @@
 		letter-spacing: -0.03em;
 		line-height: 1.1;
 	}
-	.sheet-close {
+	:global(.folio .sheet-close) {
 		display: none;
 		margin-inline-start: auto;
+	}
+	.email-dd {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		min-width: 0;
+	}
+	.email-dd a {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	:global(.folio .copy-mini) {
+		--kit-icon-btn-size: 22px;
+		--kit-icon-size: 13px;
+		--kit-icon-btn-radius: 6px;
+		--kit-icon-btn-color: var(--ink-3);
 	}
 	.insp-head {
 		display: flex;
@@ -1562,7 +1788,6 @@
 		color: #fafafa;
 		font: 500 13px/1 var(--font);
 		box-shadow: var(--shadow-pop);
-		animation: toast-in 280ms var(--ease-out);
 	}
 	.undo {
 		border: 0;
@@ -1572,12 +1797,6 @@
 		padding: 0 8px;
 		border-radius: 6px;
 		font: 500 12px/1 var(--font);
-	}
-	@keyframes toast-in {
-		from {
-			opacity: 0;
-			transform: translateX(-50%) translateY(12px) scale(0.96);
-		}
 	}
 
 	.spin {
@@ -1737,7 +1956,7 @@
 		font: 500 16px/1.2 'Inter Variable', Inter, sans-serif;
 		letter-spacing: -0.01em;
 	}
-	:global(.folio-dialog p) {
+	:global(.folio-dialog .dlg-desc) {
 		margin-top: 4px;
 		font-size: 13px;
 		color: #737373;
@@ -1768,6 +1987,12 @@
 	}
 	:global(.folio-dialog .field) {
 		min-width: 0;
+	}
+	:global(.folio-dialog input[aria-invalid='true']),
+	:global(.folio-dialog input[aria-invalid='true']:focus) {
+		box-shadow:
+			0 0 0 1px var(--no),
+			0 0 0 3px rgb(185 28 28 / 0.14);
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -1805,7 +2030,7 @@
 		.inspector.sheet {
 			transform: none;
 		}
-		.sheet-close {
+		:global(.folio .sheet-close) {
 			display: grid;
 			position: absolute;
 			top: 10px;
@@ -1817,6 +2042,20 @@
 		.folio {
 			grid-template-columns: 1fr;
 			padding-bottom: 56px;
+		}
+		/* the resizable column gives way to the off-canvas drawer */
+		:global(.folio .side-col),
+		:global(.folio .side-col > .kit-sidebar-body),
+		:global(.folio .side-col > .kit-sidebar-body > div) {
+			display: contents;
+		}
+		:global(.folio .side-col .kit-sidebar-handle),
+		:global(.folio .rail-toggle) {
+			display: none;
+		}
+		.rail .fades {
+			opacity: 1;
+			pointer-events: auto;
 		}
 		.sidebar {
 			position: fixed;

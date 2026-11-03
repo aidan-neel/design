@@ -1,36 +1,80 @@
 <script lang="ts">
 	// GIGA-UI skill: calm, precise, alive — split auth card, paper monochrome, Inter.
 	import '@fontsource-variable/inter';
+	import FieldError from '#lib/kit/FieldError.svelte';
+	import { shake } from '#lib/kit/shake.js';
+	import { cubicOut } from 'svelte/easing';
+	import { fly } from 'svelte/transition';
 
+	type Status = 'idle' | 'loading' | 'success';
+	type Mode = 'signin' | 'reset' | 'sent';
+
+	/** The demo accepts any password of at least this length; shorter ones play the "wrong password" path. */
+	const MIN_PASSWORD = 8;
+	const REQUEST_MS = 900;
+
+	let mode = $state<Mode>('signin');
 	let email = $state('');
 	let password = $state('');
 	let showPw = $state(false);
 	let emailTouched = $state(false);
 	let pwTouched = $state(false);
-	let status = $state<'idle' | 'loading' | 'success'>('idle');
+	let status = $state<Status>('idle');
+	let authError = $state<string | null>(null);
 	let slide = $state(0);
 	let paused = $state(false);
+	let formEl: HTMLFormElement | undefined = $state();
+	let passwordEl: HTMLInputElement | undefined = $state();
 
 	const slides = [0, 1, 2];
 	const emailOk = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
-	const emailErr = $derived(emailTouched && !emailOk);
-	const pwErr = $derived(pwTouched && password.length === 0);
+	const emailErr = $derived(emailTouched && !emailOk ? 'Enter a valid work email.' : null);
+	const pwErr = $derived(pwTouched && password.length === 0 ? 'Enter your password.' : null);
 
-	function submit(e: SubmitEvent) {
+	function request(): Promise<void> {
+		status = 'loading';
+		return new Promise((resolve) => setTimeout(resolve, REQUEST_MS));
+	}
+
+	async function signIn(e: SubmitEvent) {
 		e.preventDefault();
 		if (status !== 'idle') return;
 		emailTouched = true;
 		pwTouched = true;
+		authError = null;
 		if (!emailOk || password.length === 0) return;
-		status = 'loading';
-		setTimeout(() => {
-			status = 'success';
-			setTimeout(() => {
-				status = 'idle';
-				emailTouched = false;
-				pwTouched = false;
-			}, 2200);
-		}, 900);
+
+		await request();
+		if (password.length < MIN_PASSWORD) {
+			status = 'idle';
+			authError = 'That email and password don’t match. Try again or reset your password.';
+			if (formEl) shake(formEl);
+			passwordEl?.select();
+			return;
+		}
+		status = 'success';
+	}
+
+	async function sendReset(e: SubmitEvent) {
+		e.preventDefault();
+		if (status !== 'idle') return;
+		emailTouched = true;
+		if (!emailOk) return;
+		await request();
+		status = 'idle';
+		mode = 'sent';
+	}
+
+	function switchMode(next: Mode) {
+		mode = next;
+		status = 'idle';
+		authError = null;
+		emailTouched = false;
+		pwTouched = false;
+	}
+
+	function onPasswordInput() {
+		authError = null;
 	}
 
 	$effect(() => {
@@ -46,6 +90,22 @@
 	<title>Sign in · Relay</title>
 	<meta name="description" content="Sign in to your Relay workspace." />
 </svelte:head>
+
+{#snippet submitButton(idleLabel: string, doneLabel: string, busyLabel: string)}
+	<button type="submit" class="btn btn-primary reveal r8" class:done={status === 'success'} disabled={status !== 'idle'} data-status={status}>
+		<span class="face" data-active={status === 'idle' ? '' : undefined} aria-hidden={status !== 'idle'}>{idleLabel}</span>
+		<span class="face" data-active={status === 'loading' ? '' : undefined} aria-hidden="true"><span class="spinner"></span></span>
+		<span class="face" data-active={status === 'success' ? '' : undefined} aria-hidden="true">
+			{#if status === 'success'}
+				<svg class="check" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M20 6 9 17l-5-5" pathLength="1" />
+				</svg>
+			{/if}
+			{doneLabel}
+		</span>
+		<span class="sr-status" role="status">{status === 'loading' ? busyLabel : status === 'success' ? doneLabel : ''}</span>
+	</button>
+{/snippet}
 
 <div class="login">
 	<header class="topbar">
@@ -65,113 +125,142 @@
 	<main class="stage">
 		<section class="auth-card" aria-label="Sign in to Relay">
 			<div class="form-side">
-				<form class="form" onsubmit={submit} novalidate>
-					<div class="form-mark reveal r1">
-						<span class="logo-circle">
-							<span class="logo-tile sm">
-								<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-									<rect x="3.5" y="7.5" width="17" height="9" rx="4.5" stroke="#fff" stroke-width="2.4" />
-								</svg>
+				{#if mode === 'signin'}
+					<form class="form" bind:this={formEl} onsubmit={signIn} novalidate in:fly={{ y: 8, duration: 260, easing: cubicOut }}>
+						<div class="form-mark reveal r1">
+							<span class="logo-circle">
+								<span class="logo-tile sm">
+									<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+										<rect x="3.5" y="7.5" width="17" height="9" rx="4.5" stroke="#fff" stroke-width="2.4" />
+									</svg>
+								</span>
 							</span>
-						</span>
-					</div>
-					<h1 class="reveal r2">Welcome back</h1>
-					<p class="sub reveal r3">Sign in to your Relay workspace.</p>
-
-					<button type="button" class="btn btn-google reveal r4">
-						<svg viewBox="0 0 18 18" aria-hidden="true">
-							<path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92a8.78 8.78 0 0 0 2.68-6.62Z" />
-							<path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.34A9 9 0 0 0 9 18Z" />
-							<path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.94H.96a9 9 0 0 0 0 8.12l3.01-2.34Z" />
-							<path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.59A9 9 0 0 0 .96 4.94l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58Z" />
-						</svg>
-						Continue with Google
-					</button>
-
-					<div class="divider reveal r5" role="separator"><span>or</span></div>
-
-					<div class="field reveal r6">
-						<label for="email">Work email</label>
-						<input
-							id="email"
-							type="email"
-							placeholder="name@company.com"
-							autocomplete="email"
-							bind:value={email}
-							class:invalid={emailErr}
-							aria-invalid={emailErr}
-							aria-describedby={emailErr ? 'email-err' : undefined}
-							onblur={() => (emailTouched = true)}
-						/>
-						{#if emailErr}
-							<p class="field-err" id="email-err" aria-live="polite">Enter a valid work email.</p>
-						{/if}
-					</div>
-
-					<div class="field reveal r7">
-						<div class="field-head">
-							<label for="password">Password</label>
-							<a class="forgot" href="/login">Forgot password?</a>
 						</div>
-						<div class="pw-wrap">
+						<h1 class="reveal r2">Welcome back</h1>
+						<p class="sub reveal r3">Sign in to your Relay workspace.</p>
+
+						<button type="button" class="btn btn-google reveal r4">
+							<svg viewBox="0 0 18 18" aria-hidden="true">
+								<path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92a8.78 8.78 0 0 0 2.68-6.62Z" />
+								<path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.34A9 9 0 0 0 9 18Z" />
+								<path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.94H.96a9 9 0 0 0 0 8.12l3.01-2.34Z" />
+								<path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.59A9 9 0 0 0 .96 4.94l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58Z" />
+							</svg>
+							Continue with Google
+						</button>
+
+						<div class="divider reveal r5" role="separator"><span>or</span></div>
+
+						<div class="field reveal r6">
+							<label for="email">Work email</label>
 							<input
-								id="password"
-								type={showPw ? 'text' : 'password'}
-								placeholder="Enter your password"
-								autocomplete="current-password"
-								bind:value={password}
-								class:invalid={pwErr}
-								aria-invalid={pwErr}
-								aria-describedby={pwErr ? 'pw-err' : undefined}
-								onblur={() => (pwTouched = true)}
+								id="email"
+								type="email"
+								placeholder="name@company.com"
+								autocomplete="email"
+								bind:value={email}
+								class:invalid={emailErr}
+								aria-invalid={!!emailErr}
+								aria-describedby="email-err"
+								onblur={() => (emailTouched = email.length > 0 || emailTouched)}
 							/>
-							<button
-								type="button"
-								class="pw-toggle"
-								aria-label={showPw ? 'Hide password' : 'Show password'}
-								aria-pressed={showPw}
-								onclick={() => (showPw = !showPw)}
-							>
-								{#if showPw}
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<FieldError id="email-err" message={emailErr} />
+						</div>
+
+						<div class="field reveal r7">
+							<div class="field-head">
+								<label for="password">Password</label>
+								<button type="button" class="forgot" onclick={() => switchMode('reset')}>Forgot password?</button>
+							</div>
+							<div class="pw-wrap">
+								<input
+									id="password"
+									type={showPw ? 'text' : 'password'}
+									placeholder="Enter your password"
+									autocomplete="current-password"
+									bind:this={passwordEl}
+									bind:value={password}
+									oninput={onPasswordInput}
+									class:invalid={pwErr || authError}
+									aria-invalid={!!(pwErr || authError)}
+									aria-describedby="pw-err auth-err"
+									onblur={() => (pwTouched = password.length > 0 || pwTouched)}
+								/>
+								<button
+									type="button"
+									class="pw-toggle"
+									aria-label={showPw ? 'Hide password' : 'Show password'}
+									aria-pressed={showPw}
+									onclick={() => (showPw = !showPw)}
+								>
+									<svg data-active={showPw ? '' : undefined} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 										<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" />
 										<path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
 										<path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" />
 										<path d="m2 2 20 20" />
 									</svg>
-								{:else}
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+									<svg data-active={showPw ? undefined : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 										<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
 										<circle cx="12" cy="12" r="3" />
 									</svg>
-								{/if}
-							</button>
+								</button>
+							</div>
+							<FieldError id="pw-err" message={pwErr} />
 						</div>
-						{#if pwErr}
-							<p class="field-err" id="pw-err" aria-live="polite">Enter your password.</p>
-						{/if}
-					</div>
 
-					<button
-						type="submit"
-						class="btn btn-primary reveal r8"
-						class:done={status === 'success'}
-						disabled={status !== 'idle'}
-					>
-						{#if status === 'idle'}
-							Continue
-						{:else if status === 'loading'}
-							<span class="spinner" role="status" aria-label="Signing in"></span>
-						{:else}
-							<svg class="check" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-								<path d="M20 6 9 17l-5-5" pathLength="1" />
+						<FieldError id="auth-err" message={authError} />
+
+						{@render submitButton('Continue', 'Signed in', 'Signing in')}
+
+						<p class="form-foot reveal r9">No account? <a href="/login">Create one free</a></p>
+					</form>
+				{:else if mode === 'reset'}
+					<form class="form" onsubmit={sendReset} novalidate in:fly={{ y: 8, duration: 260, easing: cubicOut }}>
+						<div class="form-mark">
+							<span class="logo-circle">
+								<span class="logo-tile sm">
+									<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+										<rect x="3.5" y="7.5" width="17" height="9" rx="4.5" stroke="#fff" stroke-width="2.4" />
+									</svg>
+								</span>
+							</span>
+						</div>
+						<h1>Reset your password</h1>
+						<p class="sub">We’ll email you a link to choose a new one.</p>
+
+						<div class="field field-first">
+							<label for="reset-email">Work email</label>
+							<input
+								id="reset-email"
+								type="email"
+								placeholder="name@company.com"
+								autocomplete="email"
+								bind:value={email}
+								class:invalid={emailErr}
+								aria-invalid={!!emailErr}
+								aria-describedby="reset-email-err"
+								onblur={() => (emailTouched = email.length > 0 || emailTouched)}
+							/>
+							<FieldError id="reset-email-err" message={emailErr} />
+						</div>
+
+						{@render submitButton('Send reset link', 'Sent', 'Sending')}
+
+						<p class="form-foot"><button type="button" class="link" onclick={() => switchMode('signin')}>Back to sign in</button></p>
+					</form>
+				{:else}
+					<div class="form sent" role="status" in:fly={{ y: 8, duration: 260, easing: cubicOut }}>
+						<span class="sent-icon">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+								<rect x="2" y="4" width="20" height="16" rx="2" />
+								<path d="m22 7-10 6L2 7" />
 							</svg>
-							Signed in
-						{/if}
-					</button>
-
-					<p class="form-foot reveal r9">No account? <a href="/login">Create one free</a></p>
-				</form>
+						</span>
+						<h1>Check your inbox</h1>
+						<p class="sub">We sent a reset link to <strong>{email.trim()}</strong>. It expires in 30 minutes.</p>
+						<button type="button" class="btn btn-google" onclick={() => switchMode('signin')}>Back to sign in</button>
+					</div>
+				{/if}
 			</div>
 
 			<div
@@ -311,6 +400,8 @@
 		--line: #e8e6dd;
 		--bg-subtle: #f4f2ec;
 		--danger: #dc2626;
+		--kit-danger: var(--danger);
+		--kit-field-error-gap: 0;
 		--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 		--shadow-btn: 0 1px 2px rgb(35 32 26 / 0.06), 0 0 0 1px var(--line);
 		--shadow-btn-primary:
@@ -514,6 +605,7 @@
 	}
 
 	.btn-primary {
+		display: grid;
 		width: 100%;
 		height: 40px;
 		margin-top: 14px;
@@ -533,6 +625,33 @@
 	.btn-primary .check {
 		width: 16px;
 		height: 16px;
+	}
+
+	/* idle → busy → done share one button; the faces cross-fade and rise into place */
+	.btn-primary .face {
+		grid-area: 1 / 1;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		transition:
+			opacity 180ms var(--ease-out),
+			transform 220ms var(--ease-out),
+			filter 180ms var(--ease-out);
+	}
+
+	.btn-primary .face:not([data-active]) {
+		opacity: 0;
+		transform: translateY(6px);
+		filter: blur(2px);
+	}
+
+	.sr-status {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
 	}
 
 	.btn-primary .check path {
@@ -618,6 +737,14 @@
 		justify-content: space-between;
 	}
 
+	.forgot,
+	.link {
+		padding: 0;
+		border: 0;
+		background: none;
+		font-family: inherit;
+	}
+
 	.forgot {
 		font-size: 13px;
 		font-weight: 500;
@@ -661,12 +788,6 @@
 			0 0 0 4px rgb(220 38 38 / 0.15);
 	}
 
-	.field-err {
-		margin: 4px 0 0;
-		font-size: 12px;
-		color: var(--danger);
-	}
-
 	.pw-wrap {
 		position: relative;
 	}
@@ -694,9 +815,71 @@
 		color: var(--fg-2);
 	}
 
+	/* eye ↔ eye-off cross-fade in place */
 	.pw-toggle svg {
+		grid-area: 1 / 1;
 		width: 16px;
 		height: 16px;
+		transition:
+			opacity 150ms var(--ease-out),
+			transform 200ms var(--ease-out),
+			filter 150ms var(--ease-out);
+	}
+
+	.pw-toggle svg:not([data-active]) {
+		opacity: 0;
+		transform: scale(0.6);
+		filter: blur(2px);
+	}
+
+	/* reset flow */
+	.field-first {
+		margin-top: 20px;
+	}
+
+	.link {
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--fg);
+	}
+
+	.link:hover {
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+
+	.sent {
+		align-items: center;
+		text-align: center;
+	}
+
+	.sent-icon {
+		display: grid;
+		place-items: center;
+		width: 44px;
+		height: 44px;
+		margin: 0 auto 14px;
+		border-radius: 9999px;
+		background: var(--accent-soft);
+		color: var(--fg);
+		animation: pop-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	.sent-icon svg {
+		width: 20px;
+		height: 20px;
+	}
+
+	.sent strong {
+		font-weight: 500;
+		color: var(--fg);
+	}
+
+	@keyframes pop-in {
+		from {
+			opacity: 0;
+			transform: scale(0.6);
+		}
 	}
 
 	.form-foot {
