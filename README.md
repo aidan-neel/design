@@ -10,18 +10,24 @@ npx skills add aidan-neel/design --skill giga-ui
 
 - **Removes before it adds.** If it can be removed, remove it. Typography does the heavy lifting: Inter, at most two weights, tracking tuned per size.
 - **One accent per product.** Near-monochrome neutrals, soft layered shadows and hairlines instead of heavy borders, color only where it carries meaning.
-- **Motion with a cause.** 150–300ms, ease-out or springs, sliding indicators, origin-aware popovers, press scale — never decoration.
+- **Motion is mandatory.** Page-load stagger, hover and press, a moving active indicator, and sidebar expand/collapse. 150–300ms, ease-out or springs. Reduced motion fades; it does not skip.
 - **Realistic content.** Believable names, amounts, dates and statuses. Tinted tags with dark text, tabular numbers, honest empty and loading states.
 - **Anti-slop rules.** No default purple gradients, no emoji icons, no invented logos, no glow orbs, no fake testimonials — each with a "do" instead.
-- **Verifies in pixels.** A built-in screenshot → check → fix round: render, look, measure, fix, re-shoot (max 2 rounds) before calling any UI done.
+- **Verifies in pixels.** Screenshot, catch a mid-animation frame, fix, and re-shoot (max 2 rounds) before calling any UI done.
 
 ## Layout
 
 ```
 skills/giga-ui/
-  SKILL.md                philosophy, observed style, tokens, component recipes, motion, QA
-  references/             style-reference images from public design posts
-    sidebars/             36 sidebar and nav-rail examples
+  SKILL.md                core rules, tokens, motion mandate, routing table
+  references/
+    landing.md            landing-page recipe
+    sidebars.md           inset sidebar recipe and the Northgate anti-example
+    components.md         components, motion, states
+    anti-slop.md          banned list
+    verification.md       screenshot round, including a mid-animation check
+    landing/              cropped marketing-page references
+    sidebars/             sidebar references, including fintrack and anti-example
 ```
 
 ## Showcase app

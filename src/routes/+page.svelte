@@ -70,11 +70,11 @@
 		},
 		{
 			title: 'Anti-slop rules',
-			desc: 'Eighteen hard don’ts, each with a do: no default purple, no emoji icons, no invented logos.'
+			desc: 'A banned list, each with a do: no default purple, no emoji icons, no invented logos, no washed-out sidebars.'
 		},
 		{
 			title: 'Verify in pixels',
-			desc: 'Screenshot → check → fix, up to two rounds, before any UI is allowed to ship.'
+			desc: 'Screenshot, catch a mid-animation frame, fix, and re-shoot. Motion has to be running, not only a reduced-motion escape hatch.'
 		}
 	];
 
@@ -132,7 +132,7 @@
 <KitRoot class="gp min-h-dvh bg-white">
 	<!-- ================= narrow column: header, tagline, facts ================= -->
 	<div class="mx-auto max-w-[760px] px-6 pt-12 pb-4 sm:pt-16">
-		<header class="reveal" use:reveal>
+		<header class="reveal" {@attach reveal}>
 			<div class="flex items-center justify-between gap-3">
 				<h1 class="m-0 text-[18px] font-semibold tracking-tight text-[#171717]">
 					giga-ui
@@ -148,13 +148,14 @@
 				</a>
 			</div>
 			<p class="mt-2.5 text-[15px] text-[#555]">Artificial taste for artificial intelligence</p>
-			<p class="mt-1 text-[13px] text-[#a3a3a3]">
-				An installable design skill for coding agents. Every demo below was built by one of three models, each given only the skill.
+			<p class="mt-1 text-[13px] text-[#a3a3a3]">An installable design skill for coding agents.</p>
+			<p class="mt-1 text-[13px] font-medium text-[#171717]">
+				Every demo is a one-shot: generated in a single prompt by the named model, with no follow-up edits.
 			</p>
 		</header>
 
 		<!-- quiet facts, in place of buttons -->
-		<dl class="reveal m-0 mt-8" use:reveal={80}>
+		<dl class="reveal m-0 mt-8" {@attach (node) => reveal(node as HTMLElement, 80)}>
 			<div class="flex h-13 items-center justify-between gap-3 border-t border-line">
 				<dt class="font-mono text-[12px] text-[#8a8a8a]">Install</dt>
 				<dd class="m-0 flex min-w-0 items-center gap-1.5">
@@ -193,9 +194,14 @@
 	<!-- ================= demos: extra width, out of the column ================= -->
 	<section id="demos" class="scroll-mt-16">
 		<div class="mx-auto max-w-[1160px] px-6 pt-16 pb-4">
-			<div class="reveal mb-8 flex items-baseline justify-between gap-4" use:reveal>
-				<h2 class="m-0 text-[13px] font-medium text-[#444]">Built with the skill</h2>
-				<p class="m-0 font-mono text-[11px] text-[#a3a3a3]">three models, one skill</p>
+			<div class="reveal mb-8" {@attach reveal}>
+				<div class="flex items-baseline justify-between gap-4">
+					<h2 class="m-0 text-[13px] font-medium text-[#444]">Built with the skill</h2>
+					<p class="m-0 font-mono text-[11px] text-[#a3a3a3]">three models, one skill</p>
+				</div>
+				<p class="mt-2 max-w-[62ch] text-[13px] leading-[1.5] text-[#171717]">
+					One-shot. Each screen was generated in a single prompt by the model named on the card, with no follow-up edits.
+				</p>
 			</div>
 
 			<div class="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
@@ -203,15 +209,18 @@
 					<a
 						href={d.href}
 						class="reveal group block rounded-xl"
-						use:reveal={Math.min(i * 70, 350)}
+						{@attach (node) => reveal(node as HTMLElement, Math.min(i * 70, 350))}
 					>
 						<!-- the screenshot itself, boxed at its own 16:10 shape -->
 						<span class="block aspect-[16/10] overflow-hidden rounded-xl bg-[#f4f4f4] shadow-[0_0_0_1px_rgb(0_0_0/.06)] transition-shadow duration-200 group-hover:shadow-[0_0_0_1px_rgb(0_0_0/.1),0_8px_24px_-8px_rgb(0_0_0/.14)]">
 							<img src={d.shot} alt="{d.name} demo built with giga-ui" class="block w-full transition-transform duration-500 ease-[cubic-bezier(.23,1,.32,1)] group-hover:scale-[1.015]" loading="lazy" />
 						</span>
-						<span class="mt-4 flex items-baseline justify-between gap-3">
+						<span class="mt-4 flex items-start justify-between gap-3">
 							<span class="text-[14px] font-medium tracking-[-0.01em] text-[#171717]">{d.name}</span>
-							<span class="font-mono text-[11px] text-[#a3a3a3]">{d.product} · {d.model}</span>
+							<span class="text-right">
+								<span class="block font-mono text-[11px] text-[#737373]">{d.product} · {d.model}</span>
+								<span class="mt-0.5 block text-[12px] font-medium text-[#171717]">One-shot · no edits</span>
+							</span>
 						</span>
 						<span class="mt-1 block text-[13px] leading-[1.5] text-[#737373]">{d.desc}</span>
 						<span class="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-[#171717] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -227,13 +236,15 @@
 	<!-- ================= the skill: back in the narrow column ================= -->
 	<section id="skill" class="scroll-mt-16">
 		<div class="mx-auto max-w-[760px] px-6 pt-16 pb-16">
-			<div class="reveal" use:reveal>
+			<div class="reveal" {@attach reveal}>
 				<h2 class="m-0 text-[13px] font-medium text-[#444]">The skill</h2>
 				<p class="mt-3 text-[14px] leading-[1.6] text-[#737373]">
 					giga-ui lives in this repo at
-					<code class="rounded bg-[#f4f4f4] px-1.5 py-0.5 font-mono text-[12px] text-[#1a1a1a]">skills/giga-ui</code>
-					and loads like any agent skill: one SKILL.md with the full style, tokens, recipes and QA
-					loop, plus reference images to compare against.
+					<code class="rounded bg-[#f4f4f4] px-1.5 py-0.5 font-mono text-[12px] text-[#1a1a1a]">skills/giga-ui</code>.
+					SKILL.md is the short brief: rules, tokens, and which reference to open. Landing pages, sidebars,
+					components, the anti-slop list, and the screenshot check live in
+					<code class="rounded bg-[#f4f4f4] px-1.5 py-0.5 font-mono text-[12px] text-[#1a1a1a]">references/</code>
+					and load only for the screen you are building.
 				</p>
 				<a
 					href="https://github.com/aidan-neel/design/blob/main/skills/giga-ui/SKILL.md"
@@ -246,7 +257,7 @@
 				</a>
 			</div>
 
-			<dl class="reveal m-0 mt-8" use:reveal={80}>
+			<dl class="reveal m-0 mt-8" {@attach (node) => reveal(node as HTMLElement, 80)}>
 				{#each traits as t, i (t.title)}
 					<div class="flex gap-5 border-b border-line py-4 {i === 0 ? 'border-t border-line' : ''} {i === traits.length - 1 ? 'border-b-0' : ''}">
 						<dt class="w-[150px] shrink-0 text-[14px] font-medium tracking-[-0.01em] text-[#1a1a1a]">{t.title}</dt>
