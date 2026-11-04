@@ -356,14 +356,23 @@ Models tend to get sidebars wrong. Read this whole recipe before you write a sid
 
 Tags: **[seen]** means it is visible in Marcel's images. **[inferred]** means it is estimated from screenshots that have no known pixel scale, so treat it as a ratio and not as an exact value. **[expert]** means it is a common product-design default, not taken from him.
 
-**Two good shells. Pick one per product; neither is the default.**
-- **Inset:** the app background is tinted (`#F7F7F7`–`#F4F4F5` light, or the app base in dark). The sidebar has **no background of its own** and shares that tint. The content sits in a separate panel: white (or `#0f0f0f`–`#111` in dark), about 8px from the viewport top, right and bottom, radius 12–16px, a hairline plus a soft shadow (`0 0 0 1px rgb(0 0 0/.06), 0 1px 2px rgb(0 0 0/.04)`), with its own scroll [seen: Minto, Uniops, Timelines]. Suits calm products where the content should float: CRMs, inboxes, docs, AI chat.
-- **Flush:** the sidebar is a full-height surface of its own, edge to edge, separated from the content by one hairline; the content is not inset [seen: Snaplytics, the dark actions panel]. Suits dense tools that want every pixel: analytics, admin, IDE-like screens, embedded views. A flush sidebar is just as finished as an inset one when the rows, spacing and active pill are right.
+**One sidebar, two shells. Pick the shell per product; neither is the default.**
 
-Whichever you pick, everything below (rows, columns, pill, collapse) is the same.
+The sidebar itself is built **once** and is identical in both shells: same tinted background, width, padding, switcher, search, section labels, rows, active pill, hover, badges, footer, collapse and resize. Everything below the shell choice (rows, columns, pill, collapse) is that one build. Write it as a single `<Sidebar />` with no `inset`/`flush` prop and no conditional classes inside it. Only the wrapper that holds it and the content panel changes.
+
+| | **Inset** | **Flush** |
+|---|---|---|
+| Sidebar | The sidebar build below, on the tinted app background | **The same build, on the same tinted background** |
+| Content | A white panel floating 8px from the top, right and bottom edges, radius 12–16px, a hairline plus soft shadow, its own scroll | A white panel edge to edge: no margin, no radius, no shadow, its own scroll |
+| Seam between them | None. The panel's own ring and shadow are the edge | One 1px hairline (`border-l border-black/[.06]` on the content, or a 1px divider element) |
+
+- **Inset** suits calm products where the content should float: CRMs, inboxes, docs, AI chat [seen: Minto, Uniops, Timelines]. The tinted app background is `#F7F7F7`–`#F4F4F5` light, or the app base in dark. The panel is white (or `#0f0f0f`–`#111` in dark) with `0 0 0 1px rgb(0 0 0/.06), 0 1px 2px rgb(0 0 0/.04)`.
+- **Flush** suits dense tools that want every pixel: analytics, admin, IDE-like screens, embedded views [seen: Snaplytics, the dark actions panel]. The sidebar keeps the same tint as inset, so the white raised active pill, the hover fill and the hairline footer divider all look the same; the tonal step between the tint and the white content is what separates the two sides, plus the single hairline. Do not give the flush sidebar a different fill, a heavier border, different row heights or a different pill.
+
+**The shell test.** Build both shells with the same `<Sidebar />` and screenshot each. Crop the sidebar from both shots: the crops must match pixel for pixel, apart from the right edge. If they don't, something inside the sidebar was changed for the shell, so remove it.
 
 **What his sidebars have in common [seen]** (see `sidebars/` files for 2106499785813360687, 2106500336081063986, 2110467790343737666_3, 2113384174924988778, 2113997498008117362)
-- **The sidebar is quieter than the content.** It sits on the canvas tone (`#F7F7F7`–`#FAFAFA` light, or the app's base in dark). The main content area is a white panel with a large radius and a hairline or soft shadow, so the *content* floats and the sidebar doesn't. He confirmed this in a reply: "different color sidebar than the main block" is "a great design pattern" (xpages p020).
+- **The sidebar is quieter than the content.** It sits on the canvas tone (`#F7F7F7`–`#FAFAFA` light, or the app's base in dark). The main content area is a white panel with a large radius and a hairline or soft shadow, so the *content* floats and the sidebar doesn't. In a flush shell the tint and the sidebar stay the same and only the panel's radius, margin and shadow go. He confirmed this in a reply: "different color sidebar than the main block" is "a great design pattern" (xpages p020).
 - **Top block:** a workspace or brand switcher. It has a 20–28px rounded-square logo, the name in Medium, sometimes a muted handle on a second line (`Uniops / @kargulstudio`), and a small `⌄`/`⇅` chevron or a collapse icon (`⊟`/sidebar icon) at the right edge.
 - **Search or primary action under the switcher.** Either a search input with a `/` keycap on the right (Snaplytics, Timelines), or a full-width white secondary button ("+ New timeline") that uses the §4.1 button recipe.
 - **Section labels** are small and muted ("Navigation", "Reports & Management", "Other Tools", "Projects"). Some designs use sentence case. Others use small uppercase with tracking ("WORKSPACE", "UTILITY", "PINNED TOOLS", and "MESSAGES / DATA / DELAYS" in the dark Actions panel). Pick one style per product.
@@ -405,7 +414,8 @@ Whichever you pick, everything below (rows, columns, pill, collapse) is the same
 - **Mobile (<768px):** hide the sidebar. Open it as a left drawer (85% width, max 320) over a dimmed `rgb(0 0 0 / .3)` scrim, slide it in with `translateX` 280ms `cubic-bezier(.32,.72,0,1)`, and close it by tapping the scrim, pressing Esc, or swiping. Items grow to 44px height. In consumer mobile apps use his **floating pill tab bar** with 4–5 items instead [seen].
 
 **Common mistakes (seen in AI output; fix all of them)**
-1. A shell that is neither inset nor flush: an inset panel with no radius or margin, an inset sidebar that also has its own fill and border, a heavy shadow on the panel, or the whole page scrolling instead of the panel. Flush done badly is the same white on both sides of a 1px border with no tonal difference; give the sidebar its own surface (`#FAFAFA`, or one step up in dark).
+1. A shell that is neither inset nor flush: an inset panel with no radius or margin, an inset sidebar that also has its own fill and border, a heavy shadow on the panel, or the whole page scrolling instead of the panel.
+1b. **A flush sidebar that is a different sidebar.** The most common one: the inset version is carefully built (tint, white pill, quiet rows, switcher, footer) and the flush version is rebuilt as a plain white or grey column with a thick border, flat rows and a different active state. Flush means only "no inset panel and one hairline". It is the same sidebar on the same tint, and it never gets a fill, border, row size or pill of its own.
 2. A colored active state (`bg-indigo-600 text-white`) or a 3px left accent bar.
 3. Mixed icon sizes and styles, or emoji used as icons. Icons that are not vertically centered with the text.
 4. Labels that wrap to two lines. Missing truncation (`text-overflow: ellipsis`).
@@ -504,7 +514,14 @@ Inset shell layout:
                    max-md:m-0 max-md:rounded-none">…</main>       {/* inset, slightly elevated panel */}
 </div>
 ```
-Flush shell: drop the margins and radius on `<main>` and keep it white, and give the sidebar its own surface: `bg-[#FAFAFA] border-r border-black/[.06]` (one step up from the base in dark). On mobile, render the same `<nav>` inside a §4.8 sheet from the left, and put a hamburger in a sticky 56px top bar.
+Flush shell: the same `<Sidebar />` on the same `bg-[#F7F7F7]`, with the content panel's margin, radius and shadow removed and one hairline on its left edge:
+```tsx
+<div className="flex h-dvh overflow-hidden bg-[#F7F7F7]">
+  <Sidebar />                                                       {/* unchanged */}
+  <main className="flex-1 overflow-auto border-l border-black/[.06] bg-white">…</main>
+</div>
+```
+Switching shells changes only the `<main>` classes. On mobile, render the same `<nav>` inside a §4.8 sheet from the left, and put a hamburger in a sticky 56px top bar.
 
 ---
 
@@ -831,7 +848,7 @@ asyncio.run(main())
 - [ ] **Type hierarchy:** one clear title. At most 2 weights. Display tracking is negative. Muted grey is used for secondary text, not for the primary text.
 - [ ] **Contrast:** body text ≥ 4.5:1, and nothing important in `#A3A3A3` on white. The focus ring is visible in `shot-focus.png`.
 - [ ] **Overflow/clipping:** nothing cut off or scrolling sideways at 390px. No wrapped buttons or labels. Long text truncates with an ellipsis.
-- [ ] **Sidebar** (if present): passes §4.12 "Common mistakes" 1–10. It is cleanly **inset** (sidebar on the tinted app background with no fill of its own; content a panel with an even ~8px gap to the top, right and bottom edges, 12–16px radius on all 4 corners, a subtle ring/shadow, and its own scroll) or cleanly **flush** (sidebar on its own surface, one hairline, content edge to edge), never a mix. It has a quiet active pill, a footer pinned to the bottom, and becomes a drawer or tab bar on mobile.
+- [ ] **Sidebar** (if present): passes §4.12 "Common mistakes" 1–10. It is cleanly **inset** (sidebar on the tinted app background with no fill of its own; content a panel with an even ~8px gap to the top, right and bottom edges, 12–16px radius on all 4 corners, a subtle ring/shadow, and its own scroll) or cleanly **flush** (the same sidebar on the same tint, one hairline, content edge to edge), never a mix, and the sidebar's interior is identical in both. It has a quiet active pill, a footer pinned to the bottom, and becomes a drawer or tab bar on mobile.
 - [ ] **Slop rules:** none of the §8 tells are present (do a quick squint for a purple gradient, emoji, three centered cards, glow orbs, or fake testimonials).
 - [ ] **Motion present:** `shot-hover.png` differs from the rest state. `shot-midanim.png` shows elements partly in (opacity or translate between states). The code includes press scale, sliding indicators, and a `prefers-reduced-motion` branch.
 - [ ] **Mobile:** touch targets are ≥ 44px, the primary CTA is reachable, and nothing overlaps the sticky bars.
