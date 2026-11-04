@@ -1,0 +1,340 @@
+/* Ebb landing tokens and shared primitives. Everything is scoped under .ebb so nothing leaks. */
+
+.ebb {
+	--font: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+
+	--bg: #ffffff;
+	--bg-canvas: #f7f7f7;
+	--bg-muted: #f0f0f0;
+	--border: #ececec;
+	--fg: #171717;
+	--fg-2: #6b6b6b;
+	--fg-3: #a3a3a3;
+	--ink: #0a0a0a;
+
+	--accent: #0f766e;
+	--accent-hover: color-mix(in oklab, var(--accent), black 10%);
+	--accent-soft: color-mix(in oklab, var(--accent), white 90%);
+	--accent-line: color-mix(in oklab, var(--accent), white 70%);
+	--ring: color-mix(in oklab, var(--accent), transparent 65%);
+
+	--danger: #dc2626;
+	--danger-soft: #fef2f2;
+	--warning: #b45309;
+	--warning-soft: #fff7e6;
+
+	--shadow-btn: 0 1px 2px rgb(40 40 40 / 0.08), 0 0 0 1px #ececec;
+	--shadow-btn-ink: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 1px 2px rgb(0 0 0 / 0.2), 0 0 0 1px #000;
+	--shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 0 0 1px rgb(0 0 0 / 0.06);
+	--shadow-panel: 0 0 0 1px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04), 0 24px 48px -24px rgb(0 0 0 / 0.14);
+	--shadow-pop: 0 0 0 1px rgb(0 0 0 / 0.06), 0 8px 24px -4px rgb(0 0 0 / 0.1), 0 2px 6px rgb(0 0 0 / 0.04);
+	--shadow-modal: 0 0 0 1px rgb(0 0 0 / 0.06), 0 24px 64px -12px rgb(0 0 0 / 0.18);
+
+	--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+	--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+	--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+	--gutter: 16px;
+
+	position: relative;
+	min-height: 100dvh;
+	overflow-x: clip;
+	background: var(--bg-canvas);
+	color: var(--fg);
+	font-family: var(--font);
+	font-size: 15px;
+	line-height: 1.5;
+	font-feature-settings: 'cv11', 'ss01';
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+@media (min-width: 768px) {
+	.ebb {
+		--gutter: 32px;
+	}
+}
+
+/* One ring per control, on the box you can see. Fields draw their own. */
+.ebb :focus-visible:not(input, textarea) {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.ebb input:focus-visible,
+.ebb textarea:focus-visible {
+	outline: none;
+}
+
+.ebb .sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.ebb .container {
+	width: 100%;
+	max-width: 1184px;
+	margin-inline: auto;
+	padding-inline: var(--gutter);
+}
+
+.ebb .section {
+	padding-block: 96px;
+	scroll-margin-top: 72px;
+}
+@media (min-width: 1024px) {
+	.ebb .section {
+		padding-block: 128px;
+	}
+}
+
+.ebb .h2 {
+	margin: 0;
+	font-size: clamp(32px, 4.4vw, 48px);
+	font-weight: 500;
+	line-height: 1.05;
+	letter-spacing: -0.04em;
+	text-wrap: balance;
+}
+.ebb .lede {
+	margin: 16px 0 0;
+	max-width: 520px;
+	color: var(--fg-2);
+	font-size: 17px;
+	line-height: 1.5;
+	text-wrap: pretty;
+}
+
+.ebb .num {
+	font-family: var(--mono);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.02em;
+}
+
+/* Buttons: his secondary recipe plus an ink primary. */
+.ebb .btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 40px;
+	padding: 0 16px;
+	border: 0;
+	border-radius: 10px;
+	font: 500 14px/1 var(--font);
+	letter-spacing: -0.005em;
+	white-space: nowrap;
+	user-select: none;
+	-webkit-tap-highlight-color: transparent;
+	transition:
+		transform 150ms var(--ease-out),
+		background-color 150ms var(--ease-out),
+		box-shadow 150ms var(--ease-out),
+		color 150ms var(--ease-out),
+		opacity 150ms var(--ease-out);
+}
+.ebb .btn:active:not(:disabled) {
+	transform: scale(0.97);
+}
+.ebb .btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+.ebb .btn-lg {
+	height: 48px;
+	padding: 0 20px;
+	border-radius: 12px;
+	font-size: 15px;
+}
+.ebb .btn-sm {
+	height: 32px;
+	padding: 0 12px;
+	font-size: 13px;
+}
+.ebb .btn-ink {
+	background: var(--ink);
+	color: #fff;
+	box-shadow: var(--shadow-btn-ink);
+}
+.ebb .btn-secondary {
+	background: linear-gradient(#ffffff, #f7f7f7);
+	color: var(--fg);
+	box-shadow: var(--shadow-btn);
+}
+.ebb .btn-ghost {
+	background: transparent;
+	color: var(--fg-2);
+}
+@media (hover: hover) {
+	.ebb .btn-ink:hover:not(:disabled) {
+		background: #262626;
+	}
+	.ebb .btn-secondary:hover:not(:disabled) {
+		background: linear-gradient(#ffffff, #f0f0f0);
+	}
+	.ebb .btn-ghost:hover:not(:disabled) {
+		background: rgb(0 0 0 / 0.04);
+		color: var(--fg);
+	}
+}
+
+.ebb .icon-btn {
+	display: inline-grid;
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	border: 0;
+	border-radius: 10px;
+	background: transparent;
+	color: var(--fg-2);
+	transition:
+		background-color 120ms var(--ease-out),
+		color 120ms var(--ease-out),
+		transform 150ms var(--ease-out);
+}
+.ebb .icon-btn:active {
+	transform: scale(0.94);
+}
+@media (hover: hover) {
+	.ebb .icon-btn:hover {
+		background: rgb(0 0 0 / 0.05);
+		color: var(--fg);
+	}
+}
+
+.ebb .tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 22px;
+	padding: 0 8px;
+	border-radius: 6px;
+	font: 500 12px/1 var(--font);
+	white-space: nowrap;
+}
+.ebb .tag-accent {
+	color: color-mix(in oklab, var(--accent), black 15%);
+	background: var(--accent-soft);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent), white 82%);
+}
+.ebb .tag-warning {
+	color: var(--warning);
+	background: var(--warning-soft);
+	box-shadow: inset 0 0 0 1px #fde9c4;
+}
+.ebb .tag-neutral {
+	color: var(--fg-2);
+	background: var(--bg-muted);
+	box-shadow: inset 0 0 0 1px #e6e6e6;
+}
+
+.ebb .keycap {
+	display: inline-grid;
+	place-items: center;
+	min-width: 22px;
+	height: 22px;
+	padding: 0 6px;
+	border-radius: 6px;
+	background: #f7f7f7;
+	box-shadow: 0 0 0 1px var(--border);
+	color: var(--fg-2);
+	font: 500 11px/1 var(--font);
+}
+
+/* Floating layers from bits-ui: popovers scale from their trigger, exits are faster. */
+@keyframes ebb-pop-in {
+	from {
+		opacity: 0;
+		transform: scale(0.96) translateY(-4px);
+	}
+}
+@keyframes ebb-pop-out {
+	to {
+		opacity: 0;
+		transform: scale(0.98);
+	}
+}
+@keyframes ebb-fade-in {
+	from {
+		opacity: 0;
+	}
+}
+@keyframes ebb-fade-out {
+	to {
+		opacity: 0;
+	}
+}
+@keyframes ebb-modal-in {
+	from {
+		opacity: 0;
+		transform: translate(-50%, -50%) scale(0.96) translateY(8px);
+	}
+}
+@keyframes ebb-modal-out {
+	to {
+		opacity: 0;
+		transform: translate(-50%, -50%) scale(0.98);
+	}
+}
+@keyframes ebb-tip-in {
+	from {
+		opacity: 0;
+		transform: translateY(2px) scale(0.97);
+	}
+}
+
+.ebb-pop {
+	transform-origin: var(--bits-floating-transform-origin, top);
+}
+.ebb-pop[data-state='open'] {
+	animation: ebb-pop-in 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.ebb-pop[data-state='closed'] {
+	animation: ebb-pop-out 120ms ease-in forwards;
+}
+
+.ebb-tooltip {
+	z-index: 60;
+	padding: 6px 8px;
+	border-radius: 8px;
+	background: #171717;
+	color: #fff;
+	font: 500 12px/1.2 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+	box-shadow: 0 8px 24px -6px rgb(0 0 0 / 0.3);
+	transform-origin: var(--bits-floating-transform-origin, bottom);
+}
+.ebb-tooltip[data-state='delayed-open'] {
+	animation: ebb-tip-in 120ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.ebb-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 70;
+	background: rgb(0 0 0 / 0.4);
+}
+.ebb-overlay[data-state='open'] {
+	animation: ebb-fade-in 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.ebb-overlay[data-state='closed'] {
+	animation: ebb-fade-out 150ms ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ebb *,
+	.ebb *::before,
+	.ebb *::after,
+	.ebb-pop,
+	.ebb-tooltip,
+	.ebb-overlay {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}

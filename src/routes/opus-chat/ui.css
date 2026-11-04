@@ -1,0 +1,438 @@
+/*
+ * Halden tokens and the shared pieces (buttons, menus, tooltips, dialogs, toasts).
+ * Everything is scoped under .hd-app; menus and dialogs portal into it so they inherit the tokens.
+ */
+
+/* Same order Tailwind declares, so utilities still win over these shared classes. */
+@layer theme, base, components, utilities;
+
+@layer components {
+	.hd-app {
+		--bg: #ffffff;
+		--bg-subtle: #f7f7f7;
+		--bg-muted: #f0f0f0;
+		--bg-hover: rgb(0 0 0 / 0.04);
+		--border: #ececec;
+		--fg: #171717;
+		--fg-secondary: #6b6b6b;
+		--fg-tertiary: #a3a3a3;
+		--accent: #2f5bd3;
+		--accent-hover: color-mix(in oklab, var(--accent), black 8%);
+		--accent-soft: color-mix(in oklab, var(--accent), white 91%);
+		--ring: color-mix(in oklab, var(--accent), transparent 70%);
+		--danger: #dc2626;
+
+		--shadow-btn: 0 1px 2px rgb(40 40 40 / 0.08), 0 0 0 1px #ececec;
+		--shadow-panel: 0 0 0 1px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
+		--shadow-pop: 0 0 0 1px rgb(0 0 0 / 0.06), 0 8px 24px -4px rgb(0 0 0 / 0.1), 0 2px 6px rgb(0 0 0 / 0.04);
+		--shadow-modal: 0 0 0 1px rgb(0 0 0 / 0.06), 0 24px 64px -12px rgb(0 0 0 / 0.18);
+
+		--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+		--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+		position: fixed;
+		inset: 0;
+		display: flex;
+		overflow: hidden;
+		background: var(--bg-subtle);
+		color: var(--fg);
+		font-family: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+		font-size: 14px;
+		line-height: 1.5;
+		font-feature-settings: 'cv11', 'ss01';
+	}
+
+	.hd-app :focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+
+	/* Text fields draw their ring on the box around them. */
+	.hd-app :is(input, textarea):focus-visible {
+		outline: none;
+	}
+
+	.hd-app ::selection {
+		background: color-mix(in oklab, var(--accent), white 78%);
+	}
+
+	/* Buttons */
+
+	.hd-app .btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		height: 30px;
+		padding: 0 12px;
+		border-radius: 10px;
+		font-size: 14px;
+		font-weight: 500;
+		white-space: nowrap;
+		user-select: none;
+		transition:
+			transform 150ms var(--ease-out),
+			background-color 120ms var(--ease-out),
+			box-shadow 150ms var(--ease-out),
+			opacity 150ms var(--ease-out);
+	}
+
+	.hd-app .btn:active:not(:disabled) {
+		transform: scale(0.97);
+	}
+
+	.hd-app .btn:disabled {
+		opacity: 0.5;
+	}
+
+	.hd-app .btn-secondary {
+		background: linear-gradient(#ffffff, #f7f7f7);
+		color: var(--fg);
+		box-shadow: var(--shadow-btn);
+	}
+
+	@media (hover: hover) {
+		.hd-app .btn-secondary:hover:not(:disabled) {
+			background: linear-gradient(#ffffff, #f1f1f1);
+		}
+	}
+
+	.hd-app .btn-primary {
+		background: var(--fg);
+		color: #ffffff;
+		box-shadow:
+			inset 0 1px 0 rgb(255 255 255 / 0.14),
+			0 1px 2px rgb(0 0 0 / 0.16),
+			0 0 0 1px #000000;
+	}
+
+	@media (hover: hover) {
+		.hd-app .btn-primary:hover:not(:disabled) {
+			background: #2a2a2a;
+		}
+	}
+
+	.hd-app .btn-danger {
+		background: var(--danger);
+		color: #ffffff;
+		box-shadow:
+			inset 0 1px 0 rgb(255 255 255 / 0.16),
+			0 1px 2px rgb(0 0 0 / 0.16),
+			0 0 0 1px color-mix(in oklab, var(--danger), black 12%);
+	}
+
+	.hd-app .icon-btn {
+		display: inline-grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 30px;
+		height: 30px;
+		border-radius: 8px;
+		color: var(--fg-secondary);
+		transition:
+			transform 150ms var(--ease-out),
+			background-color 120ms var(--ease-out),
+			color 120ms var(--ease-out);
+	}
+
+	.hd-app .icon-btn:active:not(:disabled) {
+		transform: scale(0.94);
+	}
+
+	.hd-app .icon-btn:disabled {
+		opacity: 0.4;
+	}
+
+	@media (hover: hover) {
+		.hd-app .icon-btn:hover:not(:disabled) {
+			background: var(--bg-hover);
+			color: var(--fg);
+		}
+	}
+
+	/* Touch: 36px controls with an invisible ring that brings the hit area to 44px. */
+	@media (max-width: 767px) {
+		.hd-app .icon-btn {
+			position: relative;
+			width: 36px;
+			height: 36px;
+		}
+
+		.hd-app .icon-btn::after {
+			content: '';
+			position: absolute;
+			inset: -4px;
+		}
+	}
+
+	.hd-app .icon-btn[data-state='open'] {
+		background: var(--bg-hover);
+		color: var(--fg);
+	}
+
+	.hd-app .kbd {
+		display: inline-grid;
+		place-items: center;
+		min-width: 20px;
+		height: 20px;
+		padding: 0 5px;
+		border-radius: 6px;
+		background: var(--bg-subtle);
+		box-shadow: 0 0 0 1px var(--border);
+		color: var(--fg-secondary);
+		font-size: 12px;
+		font-weight: 500;
+		line-height: 1;
+	}
+
+	/* Menus (bits-ui DropdownMenu content) */
+
+	.hd-app .menu {
+		z-index: 50;
+		min-width: 200px;
+		padding: 4px;
+		border-radius: 12px;
+		background: var(--bg);
+		box-shadow: var(--shadow-pop);
+		transform-origin: var(--bits-floating-transform-origin);
+		outline: none;
+	}
+
+	.hd-app .menu[data-state='open'] {
+		animation: hd-pop-in 200ms var(--ease-out);
+	}
+
+	.hd-app .menu[data-state='closed'] {
+		animation: hd-pop-out 120ms ease-in forwards;
+	}
+
+	.hd-app .menu-item {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		min-height: 32px;
+		padding: 0 10px;
+		border-radius: 8px;
+		color: var(--fg);
+		font-size: 14px;
+		outline: none;
+		user-select: none;
+	}
+
+	.hd-app .menu-item > svg {
+		flex-shrink: 0;
+		color: var(--fg-secondary);
+	}
+
+	.hd-app .menu-item[data-highlighted] {
+		background: #f4f4f4;
+	}
+
+	.hd-app .menu-item[data-disabled] {
+		opacity: 0.45;
+	}
+
+	.hd-app .menu-item-danger,
+	.hd-app .menu-item-danger > svg {
+		color: var(--danger);
+	}
+
+	.hd-app .menu-item-danger[data-highlighted] {
+		background: #fef2f2;
+	}
+
+	.hd-app .menu-separator {
+		height: 1px;
+		margin: 4px 6px;
+		background: var(--border);
+	}
+
+	.hd-app .menu-label {
+		padding: 6px 10px 4px;
+		color: var(--fg-tertiary);
+		font-size: 12px;
+		font-weight: 500;
+	}
+
+	.hd-app .menu-shortcut {
+		margin-left: auto;
+		padding-left: 16px;
+		color: var(--fg-tertiary);
+		font-size: 12px;
+	}
+
+	/* Tooltips */
+
+	.hd-app .tip {
+		z-index: 60;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		height: 28px;
+		padding: 0 8px;
+		border-radius: 8px;
+		background: #171717;
+		color: #ffffff;
+		font-size: 12px;
+		font-weight: 500;
+		box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.2);
+		transform-origin: var(--bits-floating-transform-origin);
+		pointer-events: none;
+	}
+
+	.hd-app .tip[data-state='delayed-open'] {
+		animation: hd-tip-in 120ms var(--ease-out);
+	}
+
+	.hd-app .tip-shortcut {
+		color: rgb(255 255 255 / 0.55);
+		letter-spacing: 0.04em;
+	}
+
+	/* Dialogs */
+
+	.hd-app .overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		background: rgb(0 0 0 / 0.32);
+	}
+
+	.hd-app .overlay[data-state='open'] {
+		animation: hd-fade-in 200ms var(--ease-out);
+	}
+
+	.hd-app .overlay[data-state='closed'] {
+		animation: hd-fade-out 150ms ease-in forwards;
+	}
+
+	.hd-app .dialog {
+		position: fixed;
+		left: 50%;
+		top: 50%;
+		z-index: 50;
+		width: min(640px, calc(100vw - 32px));
+		max-height: min(600px, calc(100dvh - 32px));
+		display: flex;
+		flex-direction: column;
+		border-radius: 20px;
+		background: var(--bg);
+		box-shadow: var(--shadow-modal);
+		translate: -50% -50%;
+		outline: none;
+	}
+
+	.hd-app .dialog[data-state='open'] {
+		animation: hd-dialog-in 260ms var(--ease-out);
+	}
+
+	.hd-app .dialog[data-state='closed'] {
+		animation: hd-dialog-out 150ms ease-in forwards;
+	}
+
+	/* Mobile sidebar drawer */
+
+	.hd-app .drawer-panel {
+		position: fixed;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		z-index: 50;
+		width: min(85vw, 320px);
+		background: var(--bg-subtle);
+		box-shadow: var(--shadow-modal);
+		outline: none;
+	}
+
+	.hd-app .drawer-panel[data-state='open'] {
+		animation: hd-drawer-in 320ms var(--ease-drawer);
+	}
+
+	.hd-app .drawer-panel[data-state='closed'] {
+		animation: hd-drawer-out 220ms var(--ease-drawer) forwards;
+	}
+
+	@keyframes hd-drawer-in {
+		from {
+			transform: translateX(-100%);
+		}
+	}
+
+	@keyframes hd-drawer-out {
+		to {
+			transform: translateX(-100%);
+		}
+	}
+
+	/* First-load reveal for the empty state */
+
+	.hd-app .reveal {
+		animation: hd-reveal 420ms var(--ease-out) backwards;
+		animation-delay: calc(var(--i, 0) * 60ms);
+	}
+
+	@keyframes hd-reveal {
+		from {
+			opacity: 0;
+			filter: blur(4px);
+			transform: translateY(8px);
+		}
+	}
+
+	@keyframes hd-pop-in {
+		from {
+			opacity: 0;
+			transform: scale(0.96) translateY(-2px);
+		}
+	}
+
+	@keyframes hd-pop-out {
+		to {
+			opacity: 0;
+			transform: scale(0.98);
+		}
+	}
+
+	@keyframes hd-tip-in {
+		from {
+			opacity: 0;
+			transform: translateY(2px) scale(0.97);
+		}
+	}
+
+	@keyframes hd-fade-in {
+		from {
+			opacity: 0;
+		}
+	}
+
+	@keyframes hd-fade-out {
+		to {
+			opacity: 0;
+		}
+	}
+
+	@keyframes hd-dialog-in {
+		from {
+			opacity: 0;
+			transform: scale(0.96) translateY(8px);
+		}
+	}
+
+	@keyframes hd-dialog-out {
+		to {
+			opacity: 0;
+			transform: scale(0.98);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.hd-app *,
+		.hd-app *::before,
+		.hd-app *::after {
+			animation-duration: 0.01ms !important;
+			transition-duration: 0.01ms !important;
+			scroll-behavior: auto !important;
+		}
+	}
+}

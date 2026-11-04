@@ -3,50 +3,47 @@
 	import CopyButton from '#lib/kit/CopyButton.svelte';
 	import KitRoot from '#lib/kit/KitRoot.svelte';
 
-	type Demo = { href: string; name: string; product: string; desc: string; shot: string };
+	type Demo = {
+		href: string;
+		name: string;
+		product: string;
+		model: string;
+		desc: string;
+		shot: string;
+	};
 
 	const demos: Demo[] = [
 		{
-			href: '/chatapp',
-			name: 'Chat',
-			product: 'Cove · Northwind',
-			desc: 'AI chat with a resizable sidebar, model menu, attachments and undoable deletes.',
-			shot: '/shots/chatapp.png'
-		},
-		{
-			href: '/dashboard',
-			name: 'Analytics',
-			product: 'Sift · Acme Labs',
-			desc: 'Dark KPI dashboard: revenue chart, sessions donut, funnel and live conversions.',
-			shot: '/shots/dashboard.png'
-		},
-		{
-			href: '/dashboard-3',
-			name: 'Analytics II',
-			product: 'Northwind Labs',
-			desc: 'Segmented ranges, compare toggle, mono KPI numbers and hover tooltips.',
-			shot: '/shots/dashboard-3.png'
-		},
-		{
-			href: '/crm',
-			name: 'CRM',
-			product: 'Folio · Hale Provisions',
-			desc: 'Deal pipeline with stage pills, owners, filters and a detail pane.',
-			shot: '/shots/crm.png'
-		},
-		{
-			href: '/assistant',
-			name: 'Assistant',
-			product: 'Halo · Northwind',
-			desc: 'Churn review thread: tables, drafted posts, per-message actions.',
-			shot: '/shots/assistant.png'
-		},
-		{
-			href: '/login',
+			href: '/glm-auth',
 			name: 'Auth',
-			product: 'Relay',
-			desc: 'Split sign-in card with product preview, popover and undo toast.',
-			shot: '/shots/login.png'
+			product: 'Ledgerline',
+			model: 'GLM 5.3 Flash',
+			desc: 'Split sign-in with sign up, OTP verify, password reset and enterprise SSO lookup.',
+			shot: '/shots/glm-auth.png'
+		},
+		{
+			href: '/opus-chat',
+			name: 'Assistant',
+			product: 'Halden',
+			model: 'Claude Opus 5.5',
+			desc: 'Streaming chat with workspaces, attachments, model picker and per-message actions.',
+			shot: '/shots/opus-chat.png'
+		},
+		{
+			href: '/deepseek-free-dashboard',
+			name: 'Price dashboard',
+			product: 'Sundial',
+			model: 'DeepSeek V4.1 Flash Free',
+			desc: 'Revenue, prices, coupons and invoices with a live chart, drawer editing and ⌘K.',
+			shot: '/shots/deepseek-free-dashboard.png'
+		},
+		{
+			href: '/opus-landing',
+			name: 'Landing page',
+			product: 'Ebb',
+			model: 'Claude Opus 5.5',
+			desc: 'Scroll-driven night dial, a draggable scheduler and pricing that reacts to your bill.',
+			shot: '/shots/opus-landing.png'
 		}
 	];
 
@@ -144,7 +141,7 @@
 			</div>
 			<p class="mt-2.5 text-[15px] text-[#555]">Artificial taste for artificial intelligence</p>
 			<p class="mt-1 text-[13px] text-[#a3a3a3]">
-				An installable design skill for coding agents. Every demo below was one shot with GLM 5.3 Flash.
+				An installable design skill for coding agents. Every demo below was built by one of three models, each given only the skill.
 			</p>
 		</header>
 
@@ -172,13 +169,13 @@
 			</div>
 			<div class="flex h-13 items-center justify-between gap-3 border-t border-line">
 				<dt class="font-mono text-[12px] text-[#8a8a8a]">Model</dt>
-				<dd class="m-0 text-[13px] text-[#737373]">One shot with GLM 5.3 Flash</dd>
+				<dd class="m-0 text-[13px] text-[#737373]">GLM 5.3 Flash, DeepSeek V4.1 Flash, Claude Opus 5.5</dd>
 			</div>
 			<div class="flex h-13 items-center justify-between gap-3 border-y border-line">
 				<dt class="font-mono text-[12px] text-[#8a8a8a]">Demos</dt>
 				<dd class="m-0">
 					<a href="#demos" class="text-[13px] text-[#737373] no-underline transition-colors duration-150 hover:text-[#1a1a1a]">
-						Six screens ↓
+						Four screens ↓
 					</a>
 				</dd>
 			</div>
@@ -190,7 +187,7 @@
 		<div class="mx-auto max-w-[1160px] px-6 pt-16 pb-4">
 			<div class="reveal mb-8 flex items-baseline justify-between gap-4" use:reveal>
 				<h2 class="m-0 text-[13px] font-medium text-[#444]">Built with the skill</h2>
-				<p class="m-0 font-mono text-[11px] text-[#a3a3a3]">one shot with GLM 5.3 Flash</p>
+				<p class="m-0 font-mono text-[11px] text-[#a3a3a3]">three models, one skill</p>
 			</div>
 
 			<div class="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
@@ -206,7 +203,7 @@
 						</span>
 						<span class="mt-4 flex items-baseline justify-between gap-3">
 							<span class="text-[14px] font-medium tracking-[-0.01em] text-[#171717]">{d.name}</span>
-							<span class="font-mono text-[11px] text-[#a3a3a3]">{d.product}</span>
+							<span class="font-mono text-[11px] text-[#a3a3a3]">{d.product} · {d.model}</span>
 						</span>
 						<span class="mt-1 block text-[13px] leading-[1.5] text-[#737373]">{d.desc}</span>
 						<span class="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-[#171717] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
