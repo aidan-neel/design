@@ -166,6 +166,7 @@ At most two, after fintrack and the anti-example.
 | `references/sidebars/2026-10-03_2106500336081063986_1.png` | Nested children under a parent, gray canvas, white content. |
 | `references/sidebars/2026-10-14_2110467790343737666_3.png` | Active row with a trailing chevron, pinned tools. |
 | `references/sidebars/2026-10-22_2113384174924988778_1.png` | Content panel floating beside a quiet nav. |
+| `references/sidebars/2026-10-24_2113997498008117362_1.png` | Footer links pinned to the bottom, white content panel. |
 | `references/sidebars/2026-10-07_2107869459142914419_1.png` | Icon rail plus a list column. |
 | `references/sidebars/2026-10-06_2107505914345603127_1.png` | Dark panel. Uppercase labels here are the exception, not the default. |
 | `references/sidebars/2026-10-04_2106852842342375894_1.png` | High-contrast active pill with a count. |
