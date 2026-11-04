@@ -29,12 +29,12 @@ Also banned, from the older list: white text on saturated pills, transitions ove
 
 ## Sidebar, from the Northgate anti-example
 
-`references/sidebars/anti-example.png` is the failure. `references/sidebars/fintrack.png` is the correction. Full recipe in `sidebars.md`.
+`references/sidebars/anti-example.png` fails on styling. It happens to be flush, and a flush sidebar is fine. `references/sidebars/fintrack.png` is the inset default. The flush recipe is in `sidebars.md`.
 
-23. **No tiny uppercase tracked group labels** (MONETIZATION, WORKSPACE) on an app sidebar.
-24. **No washed-out gray labels or icons.** Resting nav text is near-black, weight 500.
+23. **No tiny uppercase tracked group labels** (MONETIZATION, WORKSPACE) on an app sidebar. *Do:* sentence case, 13px, weight 500, with a chevron.
+24. **No washed-out gray labels or icons.** *Do:* resting nav text and icons in near-black, weight 500.
 25. **No search box added by default,** and no `/` keycap decoration.
-26. **No flat flush gray panel** as the sidebar. Inset white card, soft shadow.
+26. **No sidebar without a pill, a rhythm, or a seam.** *Do:* a filled active pill that slides, 16px icons on one column, group gaps larger than row gaps. Inset (the default) or flush. A flush column needs a 1px border or a subtle tint against the content, then the same type and motion. Northgate is a styling failure, not a ban on flush.
 
 ## Sources
 

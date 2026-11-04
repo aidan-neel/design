@@ -3,7 +3,7 @@
 Open this for any app shell, dashboard nav, or settings rail. View **2–4** images, in this order:
 
 1. `references/sidebars/fintrack.png` (the target)
-2. `references/sidebars/anti-example.png` (Northgate Labs, the failure)
+2. `references/sidebars/anti-example.png` (Northgate Labs, the styling failure)
 3. At most two older stills from the table at the bottom, and only if the product needs that pattern (a nested tree, an icon rail, a dark panel)
 
 Do not open the rest of `sidebars/`, and do not open `landing/`.
@@ -11,18 +11,18 @@ Do not open the rest of `sidebars/`, and do not open `landing/`.
 | File | What to steal |
 |---|---|
 | `references/sidebars/fintrack.png` | Inset white card, soft shadow, sentence-case chevron groups, tree counts, color tiles, user card. |
-| `references/sidebars/anti-example.png` | Northgate. Don't copy it: uppercase labels, gray type, a search box, a flat flush panel. |
+| `references/sidebars/anti-example.png` | Northgate's styling, not its flush shell: uppercase labels, washed-out gray type, a search box, no active pill. |
 
 Inter is the typeface. Do not swap it for a display face to make the nav "more designed".
 
 ## The anti-example
 
-`anti-example.png` is a sidebar a model shipped from this skill: "Northgate Labs", a search box with a `/` key, tiny tracked uppercase labels (MONETIZATION, WORKSPACE), thin gray icons, gray text, and a flat flush gray panel. It is the ugliest, most generic result this skill produces. These are hard don'ts:
+`anti-example.png` is a sidebar a model shipped from this skill: "Northgate Labs". It is flush, and flush is fine. What makes it ugly is the styling: a search box with a `/` key, tiny tracked uppercase labels (MONETIZATION, WORKSPACE), thin gray icons, and washed-out gray text, with no filled active pill. These are the hard don'ts. They apply to inset and flush alike.
 
 1. **No tiny uppercase tracked section labels by default.** Group headers are sentence case ("Transactions", "Accounts"), 13px, weight 500, near-black, with a chevron. They collapse. Uppercase 11px `#A3A3A3` labels are not the default. Use them only when the rest of that product is already the Monok/Acme mono voice, and never on a light app sidebar.
 2. **No washed-out gray text or icons.** Resting labels and icons are `#171717`–`#262626`, weight 500. `#A3A3A3` and `#737373` are for counts, chevrons, emails, and placeholders. An icon that is lighter than its label is wrong.
 3. **No default search box.** Do not add a search field, and do not add a `/` keycap, unless the prompt is an inbox, docs, or command palette with a real corpus. Northgate's search is filler.
-4. **No flat flush panel.** The sidebar is not a gray slab from the top of the viewport to the bottom with a 1px line on its right. Default is the inset card below.
+4. **No missing active state, and no messy rows.** The current row is a filled pill that slides. Icons are one size (16px, stroke 1.5), on one vertical line with the labels. Gaps inside a group are smaller than gaps between groups. A sidebar without that rhythm is the Northgate failure, whether or not it touches the viewport edge.
 
 ## Default: the fintrack inset card
 
@@ -42,9 +42,30 @@ Anatomy, top to bottom:
 
 A second inset, where the sidebar has **no fill of its own** and shares the gray canvas while the content is the rounded white panel, is the same family (Minto, Uniops). Use it when the nav should disappear and the content should float. The row, type, pill, and group rules do not change. When you are unsure, build the fintrack card.
 
-**Flush is opt-in**, for a dense tool that needs every pixel. Flush means the content panel loses its margin, radius, and shadow, and gains one hairline. The sidebar component is the same one: same tint or same card interior, same rows, same pill. Flush is never a reason to rebuild a gray column. The shell test: screenshot inset and flush, crop to the sidebar, and the crops match except at the right edge.
+## Flush, equally valid
 
-Write one `<Sidebar />`. No `inset` prop and no conditional classes inside it. Only the wrapper around the content changes.
+A flush sidebar runs edge to edge: full height, no outer margin, no floating radius. Use it for a dense tool, or whenever a classic app column fits the product better than a card. It is not a lesser shell, and it is not what was wrong with Northgate.
+
+Give it this finish:
+
+- **A visible seam.** Either a 1px border (`border-r` on the sidebar or `border-l` on the content, `#E8E8E8` / `rgb(0 0 0 / .08)`) or a subtle tint against the content (`#F7F7F7` sidebar beside white, or white sidebar beside `#F7F7F7`). One of those is enough. The two regions have to read as two regions.
+- **Dark medium labels.** `#171717`–`#262626`, weight 500. Icons the same ink, 16px, stroke 1.5, vertically centered on the label, sharing one x-position down the column.
+- **Sentence-case groups.** 13px medium, near-black, with a chevron, collapsible. Same rule as inset.
+- **A filled active pill that slides.** `#EFEFEF` on a white sidebar, or a white raised pill on a tinted one. One shared pill, spring or 220ms `--ease-out`. Not a left accent bar, not a saturated row.
+- **A 4px rhythm.** Rows 32px, 2px between rows, 16–20px between groups. Padding 8–12px. Nothing eyeballed.
+- **User card, optional.** If the product has an account, pin it with `margin-top: auto`: avatar 28px, name 13px medium, email 12px `#737373`, radius 12. Help and Settings can sit above it. Leaving it off is fine when there is no account to show.
+- **The same motion.** Page-load stagger, hover in 120ms, press on the collapse control (scale 0.97), the pill slide, and width 248→60 in 220ms `--ease-out` with labels fading and icons staying put. `prefers-reduced-motion` fades instead of traveling.
+
+```tsx
+<div className="flex h-dvh overflow-hidden bg-white">
+  <aside className="flex h-dvh w-[248px] shrink-0 flex-col border-r border-[#E8E8E8] bg-white">
+    {/* same rows as inset: dark medium labels, sentence-case groups, sliding pill, optional user card */}
+  </aside>
+  <main className="min-w-0 flex-1 overflow-auto">…</main>
+</div>
+```
+
+Tint variant: `bg-[#F7F7F7]` on the sidebar, white main, and drop the border if the tone step is already clear. Rows, groups, pill, and motion stay as written above. Do not restyle the type just because the shell is flush.
 
 ## Measurements
 
@@ -71,7 +92,7 @@ Write one `<Sidebar />`. No `inset` prop and no conditional classes inside it. O
 
 ## Mistakes
 
-1. Northgate: uppercase groups, gray type, a search box, a flat flush panel.
+1. Northgate's styling: uppercase groups, washed-out gray type and icons, a default search box, no filled pill. Flush itself is not the mistake.
 2. A colored active row, or a 3px accent bar on the left.
 3. Icons of mixed sizes, emoji as icons, icons lighter than the label, icons off the text's center.
 4. Labels that wrap. Truncate with ellipsis.
@@ -80,7 +101,7 @@ Write one `<Sidebar />`. No `inset` prop and no conditional classes inside it. O
 7. Collapse that reflows icons or wraps labels.
 8. No hover, no focus, no `aria-current`.
 9. Fifteen top-level rows. Three or four groups of a few items, utilities in the footer.
-10. A flush sidebar that is a different component from the inset one.
+10. A flush sidebar with no seam (no 1px border and no tint), or one that drops the dark labels, the sentence-case groups, the sliding pill, or the motion.
 
 ## Code
 
@@ -154,7 +175,7 @@ Inset page:
 </div>
 ```
 
-Flush page, same sidebar: drop the main margin, radius, and shadow, and add `border-l border-black/[.06]`.
+Flush page: the sidebar is full height, with `border-r border-[#E8E8E8]` or `bg-[#F7F7F7]` against a white main. No outer margin, no card radius. Labels, groups, pill, and motion are the flush recipe above.
 
 ## Older stills
 

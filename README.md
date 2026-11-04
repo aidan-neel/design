@@ -22,7 +22,7 @@ skills/giga-ui/
   SKILL.md                core rules, tokens, motion mandate, routing table
   references/
     landing.md            landing-page recipe
-    sidebars.md           inset sidebar recipe and the Northgate anti-example
+    sidebars.md           inset default, flush recipe, Northgate styling failures
     components.md         components, motion, states
     anti-slop.md          banned list
     verification.md       screenshot round, including a mid-animation check

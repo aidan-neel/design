@@ -100,7 +100,7 @@ Open the PNGs. Compare the desktop shot with **one** similar reference (a landin
 - [ ] **Type.** One title. At most two weights. Display tracking is negative. Secondary text is `#737373`, not the primary.
 - [ ] **Contrast.** Body ≥ 4.5:1. Nothing important is `#A3A3A3` on white. The focus ring is visible in `shot-focus.png`, one ring, on the outer box.
 - [ ] **Overflow.** `overflow:` is empty. Nothing scrolls sideways at 390. Long text ellipsizes.
-- [ ] **Sidebar, if present.** Matches `sidebars.md`, including the four Northgate don'ts. Inset card by default. Filled neutral pill. Sentence-case groups. Footer and user card pinned. Same sidebar component if a flush shell also exists.
+- [ ] **Sidebar, if present.** Matches `sidebars.md`. Inset card, or a flush column with a 1px border or a subtle tint. Either way: dark medium labels, sentence-case groups, a filled pill that slides, aligned 16px icons, group gaps larger than row gaps. Northgate's don'ts are styling (uppercase labels, washed-out type, a default search, no pill). A user card is optional. Collapse animates.
 - [ ] **Landing, if present.** Two-line headline, one accent, product mock on a backdrop panel, no three icon cards. `landing.md`.
 - [ ] **Slop.** None of `anti-slop.md`. Squint for a purple gradient with no product in it, emoji, fake quotes, glow.
 - [ ] **Mobile.** Targets ≥ 44px. The primary action is reachable. Sticky bars do not cover it.

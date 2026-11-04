@@ -41,7 +41,7 @@ Landing and sidebar work still ends with the anti-slop list and the verification
 - **One accent** per product, in `--accent`. Green, red, and amber are for deltas and errors only.
 - **4px grid.** Space inside a group is smaller than space between groups.
 - **Radii.** Controls 8–10, inputs 10–12, cards 12–16, overlays 20–24, pills full.
-- **Inset sidebar is the default.** Inter, sentence-case groups, dark medium labels, a filled neutral pill. The Northgate sidebar in `references/sidebars/anti-example.png` is the failure mode. Build from `references/sidebars.md`.
+- **Inset sidebar is the default. Flush is equally valid.** Inter, sentence-case groups, dark medium labels, a filled pill that slides. Flush adds a 1px border or a subtle tint, then the same type and motion. Northgate in `references/sidebars/anti-example.png` fails on styling (uppercase labels, gray type, a search box), not because it is flush. Build from `references/sidebars.md`.
 - **Real content.** Believable names, amounts, and dates. No lorem, no invented logos, no "Trusted by 10,000+".
 - **Light by default** for tools. Dark for trading, code, media, or the dark twin of a marketing page. Dark surfaces step `#0D0D0D → #141414 → #1C1C1C`.
 - **One primary action** per view. A control that does nothing is left out.
