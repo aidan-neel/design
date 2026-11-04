@@ -30,6 +30,14 @@
 			shot: '/shots/opus-chat.png'
 		},
 		{
+			href: '/glm-dashboard',
+			name: 'Price dashboard',
+			product: 'Meridian',
+			model: 'GLM 5.3 Flash',
+			desc: 'Metering and billing admin: editable prices with run-rate impact, compare ranges and CSV export.',
+			shot: '/shots/glm-dashboard.png'
+		},
+		{
 			href: '/deepseek-dashboard',
 			name: 'Price dashboard',
 			product: 'Sundial',
@@ -175,7 +183,7 @@
 				<dt class="font-mono text-[12px] text-[#8a8a8a]">Demos</dt>
 				<dd class="m-0">
 					<a href="#demos" class="text-[13px] text-[#737373] no-underline transition-colors duration-150 hover:text-[#1a1a1a]">
-						Four screens ↓
+						Five screens ↓
 					</a>
 				</dd>
 			</div>
