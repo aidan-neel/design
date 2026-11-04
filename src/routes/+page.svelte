@@ -30,12 +30,12 @@
 			shot: '/shots/opus-chat.png'
 		},
 		{
-			href: '/deepseek-free-dashboard',
+			href: '/deepseek-dashboard',
 			name: 'Price dashboard',
 			product: 'Sundial',
-			model: 'DeepSeek V4.1 Flash Free',
+			model: 'DeepSeek V4.1 Flash',
 			desc: 'Revenue, prices, coupons and invoices with a live chart, drawer editing and ⌘K.',
-			shot: '/shots/deepseek-free-dashboard.png'
+			shot: '/shots/deepseek-dashboard.png'
 		},
 		{
 			href: '/opus-landing',
